@@ -64,7 +64,7 @@
             const [lastUpdated, setLastUpdated] = useState(null);
 
             // パスワード設定
-            const CORRECT_PASSWORD = 'seitokai2025';
+            const CORRECT_PASSWORD = 'seitokai2024';
 
             const handleLogin = (e) => {
                 e.preventDefault();
@@ -95,7 +95,7 @@
                 setError(null);
                 
                 try {
-                    const response = await fetch('https://script.google.com/macros/s/AKfycbxoU7Qdm4-OFXaQNBtNwEWrxT1FXg60UD_lH6SeTkUtGMA1zx2ma5XFeDTzMVo8ak5L6Q/exec');
+                    const response = await fetch('https://script.google.com/macros/s/AKfycby2vNpYa55_u_u-OR8mP9oDRbZIjGVtSzWhTJ3zlwA-F4G3UpKGU6uKvPBv8pNBRZZa/exec');
                     
                     if (!response.ok) {
                         throw new Error('データの取得に失敗しました');
@@ -297,9 +297,6 @@
         // アプリをレンダリング
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<StudentCouncilTracker />);
-    </script>
-</body>
-</html>
     </script>
 </body>
 </html>
