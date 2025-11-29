@@ -98,6 +98,7 @@
                     }
                     
                     const data = await response.json();
+                    console.log('取得したデータ:', data); // デバッグ用
                     setTasks(data);
                     setLastUpdated(new Date().toLocaleString('ja-JP'));
                     setError(null);
