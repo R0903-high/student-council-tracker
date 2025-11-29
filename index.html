@@ -99,6 +99,10 @@
                     
                     const data = await response.json();
                     console.log('取得したデータ:', data); // デバッグ用
+                    console.log('データ件数:', data.length);
+                    if (data.length > 0) {
+                        console.log('最初のタスク:', data[0]);
+                    }
                     setTasks(data);
                     setLastUpdated(new Date().toLocaleString('ja-JP'));
                     setError(null);
@@ -116,7 +120,9 @@
                     '否決': 'bg-red-100 text-red-800 border-red-300',
                     '検討中': 'bg-blue-100 text-blue-800 border-blue-300',
                     '審議中': 'bg-yellow-100 text-yellow-800 border-yellow-300',
-                    '保留': 'bg-gray-100 text-gray-800 border-gray-300'
+                    '保留': 'bg-gray-100 text-gray-800 border-gray-300',
+                    '進行中': 'bg-purple-100 text-purple-800 border-purple-300',
+                    '完了': 'bg-emerald-100 text-emerald-800 border-emerald-300'
                 };
                 return colors[status] || 'bg-gray-100 text-gray-800 border-gray-300';
             };
@@ -139,10 +145,12 @@
 
             const isValidUrl = (url) => {
                 if (!url) return false;
-                if (url.trim() === '') return false;
-                if (url === 'https://example.com' || url === 'http://example.com' || url.startsWith('https://example.com/') || url.startsWith('http://example.com/')) return false;
+                const trimmed = String(url).trim();
+                if (trimmed === '') return false;
+                if (trimmed === 'https://example.com' || trimmed === 'http://example.com' || 
+                    trimmed.startsWith('https://example.com/') || trimmed.startsWith('http://example.com/')) return false;
                 try {
-                    new URL(url);
+                    new URL(trimmed);
                     return true;
                 } catch {
                     return false;
@@ -259,9 +267,11 @@
                                             <option value="all">すべて表示</option>
                                             <option value="検討中">検討中のみ</option>
                                             <option value="審議中">審議中のみ</option>
+                                            <option value="進行中">進行中のみ</option>
                                             <option value="可決">可決のみ</option>
                                             <option value="否決">否決のみ</option>
                                             <option value="保留">保留のみ</option>
+                                            <option value="完了">完了のみ</option>
                                         </select>
                                     </div>
 
