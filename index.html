@@ -339,9 +339,25 @@
 
                                             {/* タスク情報 */}
                                             <div className="flex-grow min-w-0">
+                                                {/* カテゴリバッジ */}
+                                                {task.category && (
+                                                    <div className="mb-2">
+                                                        <span className="inline-block bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded border border-blue-200">
+                                                            {task.category}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                
                                                 <h3 className="font-bold text-gray-800 text-base sm:text-lg mb-2">
                                                     {task.name}
                                                 </h3>
+                                                
+                                                {/* 詳細テキスト */}
+                                                {task.detail && (
+                                                    <p className="text-sm text-gray-600 mb-2">
+                                                        {task.detail}
+                                                    </p>
+                                                )}
                                                 
                                                 <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
                                                     {/* ステータス */}
@@ -350,9 +366,11 @@
                                                     </span>
                                                     
                                                     {/* 更新日時 */}
-                                                    <span className="text-gray-500">
-                                                        {task.updated}
-                                                    </span>
+                                                    {task.updated && (
+                                                        <span className="text-gray-500">
+                                                            {task.updated}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
 
