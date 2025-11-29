@@ -62,6 +62,8 @@
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
             const [lastUpdated, setLastUpdated] = useState(null);
+            const [filterStatus, setFilterStatus] = useState('all');
+            const [sortOrder, setSortOrder] = useState('desc'); // desc = 新しい順, asc = 古い順
 
             // パスワード設定
             const CORRECT_PASSWORD = 'seitokai2025';
@@ -123,6 +125,41 @@
                 };
                 return colors[status] || 'bg-gray-100 text-gray-800 border-gray-300';
             };
+
+            // フィルター＆ソート処理
+            const getFilteredAndSortedTasks = () => {
+                let filtered = tasks;
+                
+                // ステータスでフィルター
+                if (filterStatus !== 'all') {
+                    filtered = tasks.filter(task => task.status === filterStatus);
+                }
+                
+                // 日付でソート
+                const sorted = [...filtered].sort((a, b) => {
+                    const dateA = new Date(a.updated || 0);
+                    const dateB = new Date(b.updated || 0);
+                    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+                });
+                
+                return sorted;
+            };
+
+            // URLが有効かチェック
+            const isValidUrl = (url) => {
+                if (!url) return false;
+                if (url.trim() === '') return false;
+                // example.comドメインのみを除外（正確なチェック）
+                if (url === 'https://example.com' || url === 'http://example.com' || url.startsWith('https://example.com/') || url.startsWith('http://example.com/')) return false;
+                try {
+                    new URL(url);
+                    return true;
+                } catch {
+                    return false;
+                }
+            };
+
+            const displayedTasks = getFilteredAndSortedTasks();
 
             // ログイン画面
             if (!isAuthenticated) {
@@ -215,6 +252,51 @@
                                     <span>最終更新: {lastUpdated}</span>
                                 </div>
                             )}
+
+                            {/* フィルター＆ソート */}
+                            <div className="mt-4 pt-4 border-t border-gray-200">
+                                <div className="flex flex-col sm:flex-row gap-3">
+                                    {/* ステータスフィルター */}
+                                    <div className="flex-1">
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                                            ステータスで絞り込み
+                                        </label>
+                                        <select
+                                            value={filterStatus}
+                                            onChange={(e) => setFilterStatus(e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        >
+                                            <option value="all">すべて表示</option>
+                                            <option value="検討中">検討中のみ</option>
+                                            <option value="審議中">審議中のみ</option>
+                                            <option value="可決">可決のみ</option>
+                                            <option value="否決">否決のみ</option>
+                                            <option value="保留">保留のみ</option>
+                                        </select>
+                                    </div>
+
+                                    {/* 日付ソート */}
+                                    <div className="flex-1">
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                                            並び順
+                                        </label>
+                                        <select
+                                            value={sortOrder}
+                                            onChange={(e) => setSortOrder(e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        >
+                                            <option value="desc">新しい順</option>
+                                            <option value="asc">古い順</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* 表示件数 */}
+                                <div className="mt-3 text-sm text-gray-600">
+                                    {displayedTasks.length}件のタスクを表示中
+                                    {filterStatus !== 'all' && ` (${filterStatus})`}
+                                </div>
+                            </div>
                         </div>
 
                         {/* タスクリスト */}
@@ -233,7 +315,16 @@
                             </div>
                         ) : (
                             <div className="space-y-3">
-                                {tasks.map((task, index) => (
+                                {displayedTasks.length === 0 ? (
+                                    <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                                        <p className="text-gray-600">
+                                            {filterStatus !== 'all' 
+                                                ? `${filterStatus}のタスクはありません` 
+                                                : 'タスクがありません'}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    displayedTasks.map((task, index) => (
                                     <div
                                         key={task.id || index}
                                         className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4"
@@ -266,7 +357,7 @@
                                             </div>
 
                                             {/* URLリンク */}
-                                            {task.url && (
+                                            {isValidUrl(task.url) && (
                                                 <div className="flex-shrink-0">
                                                     <a
                                                         href={task.url}
@@ -281,7 +372,7 @@
                                             )}
                                         </div>
                                     </div>
-                                ))}
+                                )))}
                             </div>
                         )}
 
