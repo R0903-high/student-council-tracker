@@ -1,320 +1,4 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>生徒会タスク管理システム</title>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-        .animate-spin {
-            animation: spin 1s linear infinite;
-        }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
-    <script type="text/babel">
-        const { useState, useEffect } = React;
-
-        // Lucide Iconsの代替（シンプルなSVGアイコン）
-        const RefreshIcon = ({ className, spin }) => (
-            <svg className={className + (spin ? ' animate-spin' : '')} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-        );
-
-        const ExternalLinkIcon = ({ className }) => (
-            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-        );
-
-        const ClockIcon = ({ className }) => (
-            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-        );
-
-        const AlertIcon = ({ className }) => (
-            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-        );
-
-        const LockIcon = ({ className }) => (
-            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-        );
-
-        const StudentCouncilTracker = () => {
-            const [isAuthenticated, setIsAuthenticated] = useState(false);
-            const [password, setPassword] = useState('');
-            const [passwordError, setPasswordError] = useState(false);
-            const [tasks, setTasks] = useState([]);
-            const [loading, setLoading] = useState(true);
-            const [error, setError] = useState(null);
-            const [lastUpdated, setLastUpdated] = useState(null);
-            const [filterStatus, setFilterStatus] = useState('all');
-            const [sortOrder, setSortOrder] = useState('desc'); // desc = 新しい順, asc = 古い順
-
-            // パスワード設定
-            const CORRECT_PASSWORD = 'seitokai2025';
-
-            const handleLogin = (e) => {
-                e.preventDefault();
-                if (password === CORRECT_PASSWORD) {
-                    setIsAuthenticated(true);
-                    setPasswordError(false);
-                    sessionStorage.setItem('auth', 'true');
-                } else {
-                    setPasswordError(true);
-                }
-            };
-
-            useEffect(() => {
-                const auth = sessionStorage.getItem('auth');
-                if (auth === 'true') {
-                    setIsAuthenticated(true);
-                }
-            }, []);
-
-            useEffect(() => {
-                if (isAuthenticated) {
-                    loadData();
-                }
-            }, [isAuthenticated]);
-
-            const loadData = async () => {
-                setLoading(true);
-                setError(null);
-                
-                try {
-                    const response = await fetch('https://script.google.com/macros/s/AKfycby2vNpYa55_u_u-OR8mP9oDRbZIjGVtSzWhTJ3zlwA-F4G3UpKGU6uKvPBv8pNBRZZa/exec');
-                    
-                    if (!response.ok) {
-                        throw new Error('データの取得に失敗しました');
-                    }
-                    
-                    const data = await response.json();
-                    setTasks(data);
-                    setLastUpdated(new Date().toLocaleString('ja-JP'));
-                    setError(null);
-                } catch (err) {
-                    console.error('Error loading data:', err);
-                    setError('データの読み込みに失敗しました。しばらくしてから再度お試しください。');
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const getStatusColor = (status) => {
-                const colors = {
-                    '可決': 'bg-green-100 text-green-800 border-green-300',
-                    '否決': 'bg-red-100 text-red-800 border-red-300',
-                    '検討中': 'bg-blue-100 text-blue-800 border-blue-300',
-                    '審議中': 'bg-yellow-100 text-yellow-800 border-yellow-300',
-                    '保留': 'bg-gray-100 text-gray-800 border-gray-300'
-                };
-                return colors[status] || 'bg-gray-100 text-gray-800 border-gray-300';
-            };
-
-            // フィルター＆ソート処理
-            const getFilteredAndSortedTasks = () => {
-                let filtered = tasks;
-                
-                // ステータスでフィルター
-                if (filterStatus !== 'all') {
-                    filtered = tasks.filter(task => task.status === filterStatus);
-                }
-                
-                // 日付でソート
-                const sorted = [...filtered].sort((a, b) => {
-                    const dateA = new Date(a.updated || 0);
-                    const dateB = new Date(b.updated || 0);
-                    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
-                });
-                
-                return sorted;
-            };
-
-            // URLが有効かチェック
-            const isValidUrl = (url) => {
-                if (!url) return false;
-                if (url.trim() === '') return false;
-                // example.comドメインのみを除外（正確なチェック）
-                if (url === 'https://example.com' || url === 'http://example.com' || url.startsWith('https://example.com/') || url.startsWith('http://example.com/')) return false;
-                try {
-                    new URL(url);
-                    return true;
-                } catch {
-                    return false;
-                }
-            };
-
-            const displayedTasks = getFilteredAndSortedTasks();
-
-            // ログイン画面
-            if (!isAuthenticated) {
-                return (
-                    <div style={{minHeight: '100vh', background: 'linear-gradient(to bottom right, #eff6ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'}}>
-                        <div style={{background: 'white', borderRadius: '0.5rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', padding: '2rem', width: '100%', maxWidth: '28rem'}}>
-                            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem'}}>
-                                <div style={{background: '#4f46e5', padding: '0.75rem', borderRadius: '9999px', width: '64px', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-                                    <svg style={{width: '32px', height: '32px', color: 'white'}} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                    </svg>
-                                </div>
-                            </div>
-                            <h1 style={{fontSize: '1.5rem', fontWeight: 'bold', textAlign: 'center', marginBottom: '0.5rem', color: '#1f2937'}}>
-                                生徒会タスク管理システム
-                            </h1>
-                            <p style={{textAlign: 'center', color: '#4b5563', marginBottom: '1.5rem'}}>
-                                アクセスにはパスワードが必要です
-                            </p>
-                            <form onSubmit={handleLogin}>
-                                <div style={{marginBottom: '1rem'}}>
-                                    <label style={{display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem'}}>
-                                        パスワード
-                                    </label>
-                                    <input
-                                        type="password"
-                                        value={password}
-                                        onChange={(e) => {
-                                            setPassword(e.target.value);
-                                            setPasswordError(false);
-                                        }}
-                                        style={{
-                                            width: '100%', 
-                                            padding: '0.5rem 1rem', 
-                                            border: passwordError ? '1px solid #ef4444' : '1px solid #d1d5db',
-                                            borderRadius: '0.5rem',
-                                            outline: 'none'
-                                        }}
-                                        placeholder="パスワードを入力"
-                                    />
-                                    {passwordError && (
-                                        <p style={{marginTop: '0.5rem', fontSize: '0.875rem', color: '#dc2626'}}>
-                                            パスワードが正しくありません
-                                        </p>
-                                    )}
-                                </div>
-                                <button
-                                    type="submit"
-                                    style={{width: '100%', background: '#4f46e5', color: 'white', padding: '0.5rem', borderRadius: '0.5rem', fontWeight: '500', border: 'none', cursor: 'pointer'}}
-                                >
-                                    ログイン
-                                </button>
-                            </form>
-                            <p style={{marginTop: '1.5rem', fontSize: '0.75rem', textAlign: 'center', color: '#6b7280'}}>
-                                パスワードは生徒会から配布されています
-                            </p>
-                        </div>
-                    </div>
-                );
-            }
-
-            // メイン画面
-            return (
-                <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-2 sm:p-4">
-                    <div className="max-w-6xl mx-auto">
-                        {/* ヘッダー */}
-                        <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mb-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                                <div>
-                                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
-                                        生徒会タスク管理
-                                    </h1>
-                                    <p className="text-sm text-gray-600 mt-1">
-                                        生徒会の活動状況を確認できます
-                                    </p>
-                                </div>
-                                <button
-                                    onClick={loadData}
-                                    disabled={loading}
-                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <RefreshIcon className="w-4 h-4" spin={loading} />
-                                    <span>更新</span>
-                                </button>
-                            </div>
-                            
-                            {lastUpdated && (
-                                <div className="flex items-center gap-2 mt-4 text-sm text-gray-600">
-                                    <ClockIcon className="w-4 h-4" />
-                                    <span>最終更新: {lastUpdated}</span>
-                                </div>
-                            )}
-
-                            {/* フィルター＆ソート */}
-                            <div className="mt-4 pt-4 border-t border-gray-200">
-                                <div className="flex flex-col sm:flex-row gap-3">
-                                    {/* ステータスフィルター */}
-                                    <div className="flex-1">
-                                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                                            ステータスで絞り込み
-                                        </label>
-                                        <select
-                                            value={filterStatus}
-                                            onChange={(e) => setFilterStatus(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                        >
-                                            <option value="all">すべて表示</option>
-                                            <option value="検討中">検討中のみ</option>
-                                            <option value="審議中">審議中のみ</option>
-                                            <option value="可決">可決のみ</option>
-                                            <option value="否決">否決のみ</option>
-                                            <option value="保留">保留のみ</option>
-                                        </select>
-                                    </div>
-
-                                    {/* 日付ソート */}
-                                    <div className="flex-1">
-                                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                                            並び順
-                                        </label>
-                                        <select
-                                            value={sortOrder}
-                                            onChange={(e) => setSortOrder(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                        >
-                                            <option value="desc">新しい順</option>
-                                            <option value="asc">古い順</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                {/* 表示件数 */}
-                                <div className="mt-3 text-sm text-gray-600">
-                                    {displayedTasks.length}件のタスクを表示中
-                                    {filterStatus !== 'all' && ` (${filterStatus})`}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* タスクリスト */}
-                        {loading ? (
-                            <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-                                <RefreshIcon className="w-8 h-8 mx-auto mb-4 text-indigo-600" spin={true} />
-                                <p className="text-gray-600">読み込み中...</p>
-                            </div>
-                        ) : error ? (
-                            <div className="bg-white rounded-lg shadow-lg p-8">
-                                <div className="flex items-center gap-3 text-red-600 mb-4">
-                                    <AlertIcon className="w-6 h-6" />
-                                    <p className="font-medium">エラーが発生しました</p>
-                                </div>
-                                <p className="text-gray-600">{error}</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
+<div className="space-y-4">
                                 {displayedTasks.length === 0 ? (
                                     <div className="bg-white rounded-lg shadow-lg p-8 text-center">
                                         <p className="text-gray-600">
@@ -327,63 +11,69 @@
                                     displayedTasks.map((task, index) => (
                                     <div
                                         key={task.id || index}
-                                        className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4"
+                                        className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden"
                                     >
-                                        <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-                                            {/* タスクID */}
-                                            <div className="flex-shrink-0">
-                                                <span className="inline-block bg-indigo-100 text-indigo-800 text-xs font-mono font-bold px-3 py-1 rounded">
-                                                    {task.id}
-                                                </span>
+                                        <div className="flex flex-col sm:flex-row">
+                                            {/* 左側：紫のサイドバーとタスクID */}
+                                            <div className="bg-gradient-to-b from-purple-600 to-indigo-600 p-4 sm:w-32 flex sm:flex-col items-center justify-center">
+                                                <div className="text-center">
+                                                    <div className="text-white text-xs font-semibold mb-1">TASK ID</div>
+                                                    <div className="bg-white bg-opacity-20 rounded-lg px-3 py-2">
+                                                        <span className="text-white font-mono font-bold text-lg">
+                                                            {task.id}
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </div>
 
-                                            {/* タスク情報 */}
-                                            <div className="flex-grow min-w-0">
+                                            {/* 中央：タスク情報 */}
+                                            <div className="flex-grow p-4">
                                                 {/* カテゴリバッジ */}
                                                 {task.category && (
                                                     <div className="mb-2">
-                                                        <span className="inline-block bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded border border-blue-200">
-                                                            {task.category}
+                                                        <span className="inline-block bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full border border-blue-200">
+                                                            📁 {task.category}
                                                         </span>
                                                     </div>
                                                 )}
                                                 
-                                                <h3 className="font-bold text-gray-800 text-base sm:text-lg mb-2">
+                                                {/* タスク名 */}
+                                                <h3 className="font-bold text-gray-800 text-lg mb-2">
                                                     {task.name}
                                                 </h3>
                                                 
-                                                {/* 詳細テキスト */}
+                                                {/* タスク詳細 */}
                                                 {task.detail && (
-                                                    <p className="text-sm text-gray-600 mb-2">
+                                                    <p className="text-sm text-gray-600 mb-3 leading-relaxed">
                                                         {task.detail}
                                                     </p>
                                                 )}
                                                 
-                                                <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
-                                                    {/* ステータス */}
-                                                    <span className={`px-3 py-1 rounded-full font-medium border ${getStatusColor(task.status)}`}>
+                                                {/* ステータスと更新日時 */}
+                                                <div className="flex flex-wrap items-center gap-3">
+                                                    <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getStatusColor(task.status)}`}>
                                                         {task.status}
                                                     </span>
                                                     
-                                                    {/* 更新日時 */}
                                                     {task.updated && (
-                                                        <span className="text-gray-500">
-                                                            {task.updated}
-                                                        </span>
+                                                        <div className="flex items-center gap-1 text-xs text-gray-500">
+                                                            <ClockIcon className="w-3 h-3" />
+                                                            <span>{task.updated}</span>
+                                                        </div>
                                                     )}
                                                 </div>
                                             </div>
 
-                                            {/* URLリンク */}
+                                            {/* 右側：詳細ボタン */}
                                             {isValidUrl(task.url) && (
-                                                <div className="flex-shrink-0">
+                                                <div className="p-4 flex items-center justify-center border-t sm:border-t-0 sm:border-l border-gray-100">
                                                     <a
                                                         href={task.url}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="inline-flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors text-sm"
+                                                        className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors text-sm font-medium shadow-sm"
                                                     >
-                                                        <span className="hidden sm:inline">詳細</span>
+                                                        <span>詳細を見る</span>
                                                         <ExternalLinkIcon className="w-4 h-4" />
                                                     </a>
                                                 </div>
@@ -392,20 +82,3 @@
                                     </div>
                                 )))}
                             </div>
-                        )}
-
-                        {/* フッター */}
-                        <div className="mt-6 text-center text-sm text-gray-600">
-                            <p>生徒会へのご意見・ご質問は生徒会室までお願いします</p>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        // アプリをレンダリング
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<StudentCouncilTracker />);
-    </script>
-</body>
-</html>
