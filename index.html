@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>生徒会タスク管理システム</title>
+    <title>致道館高校生徒会 - 日本の教育を生徒会から変える</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -16,6 +16,13 @@
         .animate-spin {
             animation: spin 1s linear infinite;
         }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.6s ease-out;
+        }
     </style>
 </head>
 <body>
@@ -23,7 +30,7 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // SVGアイコンコンポーネント
+        // アイコンコンポーネント
         const RefreshIcon = ({ className, spin }) => (
             <svg className={className + (spin ? ' animate-spin' : '')} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -48,19 +55,40 @@
             </svg>
         );
 
-        const StudentCouncilTracker = () => {
+        const MenuIcon = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+        );
+
+        const CloseIcon = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        );
+
+        const StudentCouncilSite = () => {
+            const [currentPage, setCurrentPage] = useState('home');
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [password, setPassword] = useState('');
             const [passwordError, setPasswordError] = useState(false);
             const [tasks, setTasks] = useState([]);
-            const [loading, setLoading] = useState(true);
+            const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
             const [lastUpdated, setLastUpdated] = useState(null);
-            const [filterStatus, setFilterStatus] = useState('all');
+            const [selectedStatuses, setSelectedStatuses] = useState([]);
             const [sortOrder, setSortOrder] = useState('desc');
+            const [selectedCategory, setSelectedCategory] = useState('all');
+            const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-            // パスワード設定
             const CORRECT_PASSWORD = 'seitokai2025';
+
+            // ナビゲーション
+            const navigation = [
+                { id: 'home', label: 'ホーム', icon: '🏠' },
+                { id: 'vision', label: 'ビジョン', icon: '🎯' },
+                { id: 'dashboard', label: 'タスク管理', icon: '📊' },
+            ];
 
             const handleLogin = (e) => {
                 e.preventDefault();
@@ -81,10 +109,10 @@
             }, []);
 
             useEffect(() => {
-                if (isAuthenticated) {
+                if (currentPage === 'dashboard' && isAuthenticated) {
                     loadData();
                 }
-            }, [isAuthenticated]);
+            }, [currentPage, isAuthenticated]);
 
             const loadData = async () => {
                 setLoading(true);
@@ -98,17 +126,12 @@
                     }
                     
                     const data = await response.json();
-                    console.log('取得したデータ:', data); // デバッグ用
-                    console.log('データ件数:', data.length);
-                    if (data.length > 0) {
-                        console.log('最初のタスク:', data[0]);
-                    }
                     setTasks(data);
                     setLastUpdated(new Date().toLocaleString('ja-JP'));
                     setError(null);
                 } catch (err) {
                     console.error('Error loading data:', err);
-                    setError('データの読み込みに失敗しました。しばらくしてから再度お試しください。');
+                    setError('データの読み込みに失敗しました。');
                 } finally {
                     setLoading(false);
                 }
@@ -128,13 +151,28 @@
                 return colors[status] || 'bg-gray-100 text-gray-800 border-gray-300';
             };
 
+            const toggleStatus = (status) => {
+                setSelectedStatuses(prev => 
+                    prev.includes(status) 
+                        ? prev.filter(s => s !== status)
+                        : [...prev, status]
+                );
+            };
+
             const getFilteredAndSortedTasks = () => {
                 let filtered = tasks;
                 
-                if (filterStatus !== 'all') {
-                    filtered = tasks.filter(task => task.status === filterStatus);
+                // カテゴリでフィルター
+                if (selectedCategory !== 'all') {
+                    filtered = filtered.filter(task => task.category === selectedCategory);
                 }
                 
+                // ステータスでフィルター（複数選択可能）
+                if (selectedStatuses.length > 0) {
+                    filtered = filtered.filter(task => selectedStatuses.includes(task.status));
+                }
+                
+                // 日付でソート
                 const sorted = [...filtered].sort((a, b) => {
                     const dateA = new Date(a.updated || 0);
                     const dateB = new Date(b.updated || 0);
@@ -159,86 +197,323 @@
             };
 
             const displayedTasks = getFilteredAndSortedTasks();
+            
+            // カテゴリ一覧を取得
+            const categories = ['all', ...new Set(tasks.map(t => t.category).filter(Boolean))];
+            
+            // ステータス一覧
+            const statuses = ['未着手', '検討中', '審議中', '進行中', '保留', '可決', '否決', '完了'];
 
-            // ログイン画面
-            if (!isAuthenticated) {
-                return (
-                    <div style={{minHeight: '100vh', background: 'linear-gradient(to bottom right, #eff6ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'}}>
-                        <div style={{background: 'white', borderRadius: '0.5rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', padding: '2rem', width: '100%', maxWidth: '28rem'}}>
-                            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem'}}>
-                                <div style={{background: '#4f46e5', padding: '0.75rem', borderRadius: '9999px', width: '64px', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-                                    <svg style={{width: '32px', height: '32px', color: 'white'}} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                    </svg>
+            // ヘッダーコンポーネント
+            const Header = () => (
+                <header className="bg-white shadow-md sticky top-0 z-50">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div className="flex justify-between items-center h-16">
+                            <div className="flex items-center">
+                                <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">
+                                    致道館高校生徒会
+                                </h1>
+                            </div>
+                            
+                            {/* デスクトップナビゲーション */}
+                            <nav className="hidden md:flex space-x-8">
+                                {navigation.map(item => (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => setCurrentPage(item.id)}
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                            currentPage === item.id
+                                                ? 'bg-indigo-100 text-indigo-700'
+                                                : 'text-gray-700 hover:bg-gray-100'
+                                        }`}
+                                    >
+                                        <span>{item.icon}</span>
+                                        <span>{item.label}</span>
+                                    </button>
+                                ))}
+                            </nav>
+
+                            {/* モバイルメニューボタン */}
+                            <button
+                                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                                className="md:hidden p-2 rounded-md text-gray-700 hover:bg-gray-100"
+                            >
+                                {mobileMenuOpen ? <CloseIcon className="w-6 h-6" /> : <MenuIcon className="w-6 h-6" />}
+                            </button>
+                        </div>
+
+                        {/* モバイルナビゲーション */}
+                        {mobileMenuOpen && (
+                            <div className="md:hidden py-4 border-t border-gray-200">
+                                {navigation.map(item => (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => {
+                                            setCurrentPage(item.id);
+                                            setMobileMenuOpen(false);
+                                        }}
+                                        className={`flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                            currentPage === item.id
+                                                ? 'bg-indigo-100 text-indigo-700'
+                                                : 'text-gray-700 hover:bg-gray-100'
+                                        }`}
+                                    >
+                                        <span>{item.icon}</span>
+                                        <span>{item.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </header>
+            );
+
+            // ホームページ
+            const HomePage = () => (
+                <div className="fade-in">
+                    {/* ヒーローセクション */}
+                    <section className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-20">
+                        <div className="max-w-4xl mx-auto px-4 text-center">
+                            <h2 className="text-4xl sm:text-5xl font-bold mb-6">
+                                日本の教育を<br className="sm:hidden" />生徒会から変える
+                            </h2>
+                            <p className="text-xl sm:text-2xl mb-8 opacity-90">
+                                致道館の自学自習の伝統を継承し、<br className="sm:hidden" />
+                                民主的な学校運営を実現する
+                            </p>
+                            <button
+                                onClick={() => setCurrentPage('vision')}
+                                className="bg-white text-indigo-600 px-8 py-3 rounded-lg font-bold text-lg hover:bg-gray-100 transition-colors shadow-lg"
+                            >
+                                ビジョンを見る →
+                            </button>
+                        </div>
+                    </section>
+
+                    {/* 3つの柱 */}
+                    <section className="py-16 bg-white">
+                        <div className="max-w-6xl mx-auto px-4">
+                            <h3 className="text-3xl font-bold text-center mb-12 text-gray-800">
+                                私たちの取り組み
+                            </h3>
+                            <div className="grid md:grid-cols-3 gap-8">
+                                <div className="p-6 border-2 border-indigo-200 rounded-lg hover:shadow-lg transition-shadow">
+                                    <div className="text-4xl mb-4">🔍</div>
+                                    <h4 className="text-xl font-bold mb-3 text-gray-800">透明化</h4>
+                                    <p className="text-gray-600">
+                                        生徒会の活動をすべて可視化。タスク管理システムで誰もが進捗を確認できます。
+                                    </p>
+                                </div>
+                                <div className="p-6 border-2 border-purple-200 rounded-lg hover:shadow-lg transition-shadow">
+                                    <div className="text-4xl mb-4">💰</div>
+                                    <h4 className="text-xl font-bold mb-3 text-gray-800">校内VC</h4>
+                                    <p className="text-gray-600">
+                                        生徒の企画を資金面で支援。アイデアを形にする仕組みを作ります。
+                                    </p>
+                                </div>
+                                <div className="p-6 border-2 border-pink-200 rounded-lg hover:shadow-lg transition-shadow">
+                                    <div className="text-4xl mb-4">🌏</div>
+                                    <h4 className="text-xl font-bold mb-3 text-gray-800">全国展開</h4>
+                                    <p className="text-gray-600">
+                                        致道館のモデルを全国の高校に展開。日本中の生徒会を変革します。
+                                    </p>
                                 </div>
                             </div>
-                            <h1 style={{fontSize: '1.5rem', fontWeight: 'bold', textAlign: 'center', marginBottom: '0.5rem', color: '#1f2937'}}>
-                                生徒会タスク管理システム
-                            </h1>
-                            <p style={{textAlign: 'center', color: '#4b5563', marginBottom: '1.5rem'}}>
-                                アクセスにはパスワードが必要です
+                        </div>
+                    </section>
+
+                    {/* CTA */}
+                    <section className="py-16 bg-gray-50">
+                        <div className="max-w-4xl mx-auto px-4 text-center">
+                            <h3 className="text-3xl font-bold mb-6 text-gray-800">
+                                あなたも参加しませんか？
+                            </h3>
+                            <p className="text-xl text-gray-600 mb-8">
+                                私たちと一緒に、学校を、そして日本の教育を変えていきましょう
                             </p>
-                            <form onSubmit={handleLogin}>
-                                <div style={{marginBottom: '1rem'}}>
-                                    <label style={{display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem'}}>
-                                        パスワード
-                                    </label>
-                                    <input
-                                        type="password"
-                                        value={password}
-                                        onChange={(e) => {
-                                            setPassword(e.target.value);
-                                            setPasswordError(false);
-                                        }}
-                                        style={{
-                                            width: '100%', 
-                                            padding: '0.5rem 1rem', 
-                                            border: passwordError ? '1px solid #ef4444' : '1px solid #d1d5db',
-                                            borderRadius: '0.5rem',
-                                            outline: 'none'
-                                        }}
-                                        placeholder="パスワードを入力"
-                                    />
-                                    {passwordError && (
-                                        <p style={{marginTop: '0.5rem', fontSize: '0.875rem', color: '#dc2626'}}>
-                                            パスワードが正しくありません
-                                        </p>
-                                    )}
-                                </div>
-                                <button
-                                    type="submit"
-                                    style={{width: '100%', background: '#4f46e5', color: 'white', padding: '0.5rem', borderRadius: '0.5rem', fontWeight: '500', border: 'none', cursor: 'pointer'}}
-                                >
-                                    ログイン
-                                </button>
-                            </form>
-                            <p style={{marginTop: '1.5rem', fontSize: '0.75rem', textAlign: 'center', color: '#6b7280'}}>
-                                パスワードは生徒会から配布されています
+                            <button
+                                onClick={() => setCurrentPage('dashboard')}
+                                className="bg-indigo-600 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-indigo-700 transition-colors shadow-lg"
+                            >
+                                活動を見る →
+                            </button>
+                        </div>
+                    </section>
+                </div>
+            );
+
+            // ビジョンページ
+            const VisionPage = () => (
+                <div className="fade-in max-w-4xl mx-auto px-4 py-12">
+                    <h2 className="text-4xl font-bold mb-8 text-gray-800">私たちのビジョン</h2>
+                    
+                    {/* ビジョンステートメント */}
+                    <section className="mb-12 p-8 bg-indigo-50 rounded-lg border-l-4 border-indigo-600">
+                        <h3 className="text-2xl font-bold mb-4 text-indigo-900">
+                            日本の教育を生徒会から変える
+                        </h3>
+                        <p className="text-lg text-gray-700 leading-relaxed">
+                            私たちは、形骸化した生徒会を民主的で透明性の高い組織に変革します。
+                            致道館の自学自習の伝統を受け継ぎ、生徒一人ひとりが主体的に学校運営に参加できる環境を作ります。
+                            そして、このモデルを全国に展開し、日本中の高校生が自分たちの手で学校を変えられる未来を実現します。
+                        </p>
+                    </section>
+
+                    {/* なぜ今、改革が必要か */}
+                    <section className="mb-12">
+                        <h3 className="text-2xl font-bold mb-6 text-gray-800">なぜ今、生徒会改革が必要か</h3>
+                        <div className="space-y-4 text-gray-700">
+                            <p className="text-lg leading-relaxed">
+                                多くの高校で、生徒会は「お飾り」になっています。形式的な活動だけで、
+                                本当に生徒の声を反映した変革は起きていません。
+                            </p>
+                            <p className="text-lg leading-relaxed">
+                                しかし、致道館には自学自習という素晴らしい伝統があります。
+                                生徒が自ら考え、行動する文化。この伝統を生徒会にも活かせば、
+                                本当の意味での民主的な学校運営が実現できるはずです。
                             </p>
                         </div>
-                    </div>
-                );
-            }
+                    </section>
 
-            // メイン画面
-            return (
-                <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-2 sm:p-4">
-                    <div className="max-w-6xl mx-auto">
+                    {/* ロードマップ */}
+                    <section className="mb-12">
+                        <h3 className="text-2xl font-bold mb-6 text-gray-800">3年間のロードマップ</h3>
+                        <div className="space-y-6">
+                            <div className="border-l-4 border-blue-500 pl-6 py-4">
+                                <h4 className="text-xl font-bold mb-2 text-blue-900">2024-2025年：基盤づくり</h4>
+                                <ul className="list-disc list-inside text-gray-700 space-y-2">
+                                    <li>タスク管理システムの構築と運用開始</li>
+                                    <li>校内VCプログラムの立ち上げ</li>
+                                    <li>生徒会活動の完全透明化</li>
+                                </ul>
+                            </div>
+                            <div className="border-l-4 border-purple-500 pl-6 py-4">
+                                <h4 className="text-xl font-bold mb-2 text-purple-900">2025-2026年：校内展開</h4>
+                                <ul className="list-disc list-inside text-gray-700 space-y-2">
+                                    <li>全校生徒が参加できる仕組みの確立</li>
+                                    <li>校内VCからの成功事例創出</li>
+                                    <li>他校との連携開始</li>
+                                </ul>
+                            </div>
+                            <div className="border-l-4 border-pink-500 pl-6 py-4">
+                                <h4 className="text-xl font-bold mb-2 text-pink-900">2026-2027年：全国展開</h4>
+                                <ul className="list-disc list-inside text-gray-700 space-y-2">
+                                    <li>モデルの体系化とマニュアル作成</li>
+                                    <li>全国の高校への展開開始</li>
+                                    <li>生徒会改革ネットワークの構築</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* 致道館との繋がり */}
+                    <section className="mb-12 p-8 bg-yellow-50 rounded-lg">
+                        <h3 className="text-2xl font-bold mb-4 text-gray-800">致道館の伝統を受け継ぐ</h3>
+                        <p className="text-lg text-gray-700 leading-relaxed mb-4">
+                            致道館は、江戸時代から続く自学自習の伝統を持つ学校です。
+                            「自ら学び、自ら考える」という精神は、まさに私たちが目指す
+                            主体的な生徒会運営の根幹となる考え方です。
+                        </p>
+                        <p className="text-lg text-gray-700 leading-relaxed">
+                            この歴史ある伝統を現代に活かし、新しい形の民主的な学校運営を実現する。
+                            それが私たちの使命です。
+                        </p>
+                    </section>
+
+                    {/* CTA */}
+                    <section className="text-center p-8 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg text-white">
+                        <h3 className="text-2xl font-bold mb-4">
+                            一緒に未来を創りませんか？
+                        </h3>
+                        <p className="text-lg mb-6 opacity-90">
+                            あなたのアイデアと行動が、学校を、日本を変えます
+                        </p>
+                        <button
+                            onClick={() => setCurrentPage('dashboard')}
+                            className="bg-white text-indigo-600 px-8 py-3 rounded-lg font-bold hover:bg-gray-100 transition-colors"
+                        >
+                            活動状況を見る →
+                        </button>
+                    </section>
+                </div>
+            );
+
+            // タスク管理ページ（ログイン必要）
+            const DashboardPage = () => {
+                if (!isAuthenticated) {
+                    return (
+                        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
+                                <div className="flex items-center justify-center mb-6">
+                                    <div className="bg-indigo-600 p-3 rounded-full w-16 h-16 flex items-center justify-center">
+                                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                        </svg>
+                                    </div>
+                                </div>
+                                <h2 className="text-2xl font-bold text-center mb-2 text-gray-800">
+                                    タスク管理システム
+                                </h2>
+                                <p className="text-center text-gray-600 mb-6">
+                                    アクセスにはパスワードが必要です
+                                </p>
+                                <form onSubmit={handleLogin}>
+                                    <div className="mb-4">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            パスワード
+                                        </label>
+                                        <input
+                                            type="password"
+                                            value={password}
+                                            onChange={(e) => {
+                                                setPassword(e.target.value);
+                                                setPasswordError(false);
+                                            }}
+                                            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
+                                                passwordError 
+                                                    ? 'border-red-500 focus:ring-red-500' 
+                                                    : 'border-gray-300 focus:ring-indigo-500'
+                                            }`}
+                                            placeholder="パスワードを入力"
+                                        />
+                                        {passwordError && (
+                                            <p className="mt-2 text-sm text-red-600">
+                                                パスワードが正しくありません
+                                            </p>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                                    >
+                                        ログイン
+                                    </button>
+                                </form>
+                                <p className="mt-6 text-xs text-center text-gray-500">
+                                    パスワードは生徒会から配布されています
+                                </p>
+                            </div>
+                        </div>
+                    );
+                }
+
+                return (
+                    <div className="fade-in max-w-7xl mx-auto px-4 py-8">
                         {/* ヘッダー */}
-                        <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mb-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                                 <div>
-                                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
-                                        生徒会タスク管理
-                                    </h1>
+                                    <h2 className="text-3xl font-bold text-gray-800">
+                                        タスク管理ダッシュボード
+                                    </h2>
                                     <p className="text-sm text-gray-600 mt-1">
-                                        生徒会の活動状況を確認できます
+                                        生徒会の活動状況をリアルタイムで確認
                                     </p>
                                 </div>
                                 <button
                                     onClick={loadData}
                                     disabled={loading}
-                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
                                 >
                                     <RefreshIcon className="w-4 h-4" spin={loading} />
                                     <span>更新</span>
@@ -246,174 +521,189 @@
                             </div>
                             
                             {lastUpdated && (
-                                <div className="flex items-center gap-2 mt-4 text-sm text-gray-600">
+                                <div className="flex items-center gap-2 text-sm text-gray-600 mb-6">
                                     <ClockIcon className="w-4 h-4" />
                                     <span>最終更新: {lastUpdated}</span>
                                 </div>
                             )}
 
-                            {/* フィルター＆ソート */}
-                            <div className="mt-4 pt-4 border-t border-gray-200">
-                                <div className="flex flex-col sm:flex-row gap-3">
-                                    {/* ステータスフィルター */}
-                                    <div className="flex-1">
-                                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                                            ステータスで絞り込み
-                                        </label>
-                                        <select
-                                            value={filterStatus}
-                                            onChange={(e) => setFilterStatus(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                        >
-                                            <option value="all">すべて表示</option>
-                                            <option value="検討中">検討中のみ</option>
-                                            <option value="審議中">審議中のみ</option>
-                                            <option value="進行中">進行中のみ</option>
-                                            <option value="可決">可決のみ</option>
-                                            <option value="否決">否決のみ</option>
-                                            <option value="保留">保留のみ</option>
-                                            <option value="完了">完了のみ</option>
-                                            <option value="未着手">未着手のみ</option>
-                                        </select>
-                                    </div>
-
-                                    {/* 日付ソート */}
-                                    <div className="flex-1">
-                                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                                            並び順
-                                        </label>
-                                        <select
-                                            value={sortOrder}
-                                            onChange={(e) => setSortOrder(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                        >
-                                            <option value="desc">新しい順</option>
-                                            <option value="asc">古い順</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                {/* 表示件数 */}
-                                <div className="mt-3 text-sm text-gray-600">
-                                    {displayedTasks.length}件のタスクを表示中
-                                    {filterStatus !== 'all' && ` (${filterStatus})`}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* タスクリスト */}
-                        {loading ? (
-                            <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-                                <RefreshIcon className="w-8 h-8 mx-auto mb-4 text-indigo-600" spin={true} />
-                                <p className="text-gray-600">読み込み中...</p>
-                            </div>
-                        ) : error ? (
-                            <div className="bg-white rounded-lg shadow-lg p-8">
-                                <div className="flex items-center gap-3 text-red-600 mb-4">
-                                    <AlertIcon className="w-6 h-6" />
-                                    <p className="font-medium">エラーが発生しました</p>
-                                </div>
-                                <p className="text-gray-600">{error}</p>
-                            </div>
-                        ) : (
+                            {/* フィルター */}
                             <div className="space-y-4">
-                                {displayedTasks.length === 0 ? (
-                                    <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-                                        <p className="text-gray-600">
-                                            {filterStatus !== 'all' 
-                                                ? `${filterStatus}のタスクはありません` 
-                                                : 'タスクがありません'}
-                                        </p>
+                                {/* カテゴリフィルター */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        カテゴリで絞り込み
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {categories.map(cat => (
+                                            <button
+                                                key={cat}
+                                                onClick={() => setSelectedCategory(cat)}
+                                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                                    selectedCategory === cat
+                                                        ? 'bg-indigo-600 text-white'
+                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                }`}
+                                            >
+                                                {cat === 'all' ? 'すべて' : cat}
+                                            </button>
+                                        ))}
                                     </div>
-                                ) : (
-                                    displayedTasks.map((task, index) => (
-                                    <div
-                                        key={task.id || index}
-                                        className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden"
-                                    >
-                                        <div className="flex flex-col sm:flex-row">
-                                            {/* 左側：紫のサイドバーとタスクID */}
-                                            <div className="bg-gradient-to-b from-purple-600 to-indigo-600 p-4 sm:w-32 flex sm:flex-col items-center justify-center">
-                                                <div className="text-center">
-                                                    <div className="text-white text-xs font-semibold mb-1">TASK ID</div>
-                                                    <div className="bg-white bg-opacity-20 rounded-lg px-3 py-2">
-                                                        <span className="text-white font-mono font-bold text-lg">
-                                                            {task.id}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                </div>
 
-                                            {/* 中央：タスク情報 */}
-                                            <div className="flex-grow p-4">
-                                                {/* カテゴリバッジ */}
-                                                {task.category && (
-                                                    <div className="mb-2">
-                                                        <span className="inline-block bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full border border-blue-200">
-                                                            📁 {task.category}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                                
-                                                {/* タスク名 */}
-                                                <h3 className="font-bold text-gray-800 text-lg mb-2">
-                                                    {task.name}
-                                                </h3>
-                                                
-                                                {/* タスク詳細 */}
-                                                {task.detail && (
-                                                    <p className="text-sm text-gray-600 mb-3 leading-relaxed">
-                                                        {task.detail}
-                                                    </p>
-                                                )}
-                                                
-                                                {/* ステータスと更新日時 */}
-                                                <div className="flex flex-wrap items-center gap-3">
-                                                    <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getStatusColor(task.status)}`}>
-                                                        {task.status}
-                                                    </span>
-                                                    
-                                                    {task.updated && (
-                                                        <div className="flex items-center gap-1 text-xs text-gray-500">
-                                                            <ClockIcon className="w-3 h-3" />
-                                                            <span>{task.updated}</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* 右側：詳細ボタン */}
-                                            {isValidUrl(task.url) && (
-                                                <div className="p-4 flex items-center justify-center border-t sm:border-t-0 sm:border-l border-gray-100">
-                                                    <a
-                                                        href={task.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors text-sm font-medium shadow-sm"
-                                                    >
-                                                        <span>詳細を見る</span>
-                                                        <ExternalLinkIcon className="w-4 h-4" />
-                                                    </a>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )))}
+                                {/* ステータスフィルター（チェックボックス） */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        ステータスで絞り込み（複数選択可）
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {statuses.map(status => (
+                                            <label
+                                                 {/* ソート */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    並び順
+                                </label>
+                                <select
+                                    value={sortOrder}
+                                    onChange={(e) => setSortOrder(e.target.value)}
+                                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                >
+                                    <option value="desc">新しい順</option>
+                                    <option value="asc">古い順</option>
+                                </select>
                             </div>
-                        )}
 
-                        {/* フッター */}
-                        <div className="mt-6 text-center text-sm text-gray-600">
-                            <p>生徒会へのご意見・ご質問は生徒会室までお願いします</p>
+                            {/* 表示件数 */}
+                            <div className="text-sm text-gray-600">
+                                {displayedTasks.length}件のタスクを表示中
+                            </div>
                         </div>
                     </div>
+
+                    {/* タスクリスト */}
+                    {loading ? (
+                        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                            <RefreshIcon className="w-8 h-8 mx-auto mb-4 text-indigo-600" spin={true} />
+                            <p className="text-gray-600">読み込み中...</p>
+                        </div>
+                    ) : error ? (
+                        <div className="bg-white rounded-lg shadow-lg p-8">
+                            <div className="flex items-center gap-3 text-red-600 mb-4">
+                                <AlertIcon className="w-6 h-6" />
+                                <p className="font-medium">エラーが発生しました</p>
+                            </div>
+                            <p className="text-gray-600">{error}</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {displayedTasks.length === 0 ? (
+                                <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                                    <p className="text-gray-600">
+                                        条件に一致するタスクがありません
+                                    </p>
+                                </div>
+                            ) : (
+                                displayedTasks.map((task, index) => (
+                                <div
+                                    key={task.id || index}
+                                    className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden"
+                                >
+                                    <div className="flex flex-col sm:flex-row">
+                                        {/* 左側：IDバー */}
+                                        <div className="bg-gradient-to-b from-purple-600 to-indigo-600 p-4 sm:w-24 flex items-center justify-center">
+                                            <div className="text-center">
+                                                <div className="text-white text-xs font-semibold mb-1">ID</div>
+                                                <div className="bg-white bg-opacity-20 rounded-lg px-3 py-2">
+                                                    <span className="text-white font-mono font-bold text-xl">
+                                                        {task.id}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* 中央：タスク情報 */}
+                                        <div className="flex-grow p-4">
+                                            {task.category && (
+                                                <div className="mb-2">
+                                                    <span className="inline-block bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full border border-blue-200">
+                                                        📁 {task.category}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            
+                                            <h3 className="font-bold text-gray-800 text-lg mb-2">
+                                                {task.name}
+                                            </h3>
+                                            
+                                            {task.detail && (
+                                                <p className="text-sm text-gray-600 mb-3 leading-relaxed">
+                                                    {task.detail}
+                                                </p>
+                                            )}
+                                            
+                                            <div className="flex flex-wrap items-center gap-3">
+                                                <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getStatusColor(task.status)}`}>
+                                                    {task.status}
+                                                </span>
+                                                
+                                                {task.updated && (
+                                                    <div className="flex items-center gap-1 text-xs text-gray-500">
+                                                        <ClockIcon className="w-3 h-3" />
+                                                        <span>{task.updated}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* 右側：詳細ボタン */}
+                                        {isValidUrl(task.url) && (
+                                            <div className="p-4 flex items-center justify-center border-t sm:border-t-0 sm:border-l border-gray-100">
+                                                
+                                                    href={task.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors text-sm font-medium"
+                                                >
+                                                    <span>詳細</span>
+                                                    <ExternalLinkIcon className="w-4 h-4" />
+                                                </a>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )))}
+                        </div>
+                    )}
                 </div>
             );
         };
 
-        // アプリをレンダリング
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<StudentCouncilTracker />);
-    </script>
-</body>
-</html>
+        // メインレンダリング
+        return (
+            <div className="min-h-screen bg-gray-50">
+                <Header />
+                <main>
+                    {currentPage === 'home' && <HomePage />}
+                    {currentPage === 'vision' && <VisionPage />}
+                    {currentPage === 'dashboard' && <DashboardPage />}
+                </main>
+                
+                {/* フッター */}
+                <footer className="bg-gray-800 text-white py-8 mt-12">
+                    <div className="max-w-7xl mx-auto px-4 text-center">
+                        <p className="text-sm">
+                            © 2024-2025 致道館高校生徒会 | 日本の教育を生徒会から変える
+                        </p>
+                        <p className="text-xs mt-2 text-gray-400">
+                            ご意見・ご質問は生徒会室までお願いします
+                        </p>
+                    </div>
+                </footer>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<StudentCouncilSite />);
+</script>
