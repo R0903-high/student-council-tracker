@@ -469,6 +469,7 @@
                                                 setPassword(e.target.value);
                                                 setPasswordError(false);
                                             }}
+                                            autoFocus
                                             className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
                                                 passwordError 
                                                     ? 'border-red-500 focus:ring-red-500' 
@@ -678,7 +679,7 @@
                                             {/* 右側：詳細ボタン */}
                                             {isValidUrl(task.url) && (
                                                 <div className="p-4 flex items-center justify-center border-t sm:border-t-0 sm:border-l border-gray-100">
-                                                    
+                                                    <a>
                                                         href={task.url}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
@@ -686,7 +687,7 @@
                                                     >
                                                         <span>詳細</span>
                                                         <ExternalLinkIcon className="w-4 h-4" />
-                                                    
+                                                    </a>
                                                 </div>
                                             )}
                                         </div>
