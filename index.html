@@ -67,12 +67,16 @@
             </svg>
         );
 
+        const MessageIcon = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+        );
+
         const StudentCouncilSite = () => {
             const [currentPage, setCurrentPage] = useState('home');
-            const [isAuthenticated, setIsAuthenticated] = useState(false);
-            const [password, setPassword] = useState('');
-            const [passwordError, setPasswordError] = useState(false);
             const [tasks, setTasks] = useState([]);
+            const [suggestions, setSuggestions] = useState([]);
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
             const [lastUpdated, setLastUpdated] = useState(null);
@@ -81,45 +85,37 @@
             const [selectedCategory, setSelectedCategory] = useState('all');
             const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-            const CORRECT_PASSWORD = 'seitokai2025';
+            // タスク管理のAPI URL（既存）
+            const TASKS_API_URL = 'https://script.google.com/macros/s/AKfycby2vNpYa55_u_u-OR8mP9oDRbZIjGVtSzWhTJ3zlwA-F4G3UpKGU6uKvPBv8pNBRZZa/exec';
+            
+            // デジタル目安箱のAPI URL（新しく作成したGoogle Apps ScriptのURLに置き換えてください）
+            const SUGGESTIONS_API_URL = 'https://script.google.com/macros/s/AKfycbw9GVeYuWo5ree_-cRL7uu3dv6rFqnNQP2kYUwDeUIta1q5xBhQ1vAXqkthQ_9lXj2d/exec';
+            
+            // Google FormのURL（実際のURLに置き換えてください）
+            const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfAGjeQkSGIWRo5EuGv_aFKI1oxIEHL6kE5vyAs2pUl_yyFGQ/viewform?usp=header';
 
             // ナビゲーション
             const navigation = [
                 { id: 'home', label: 'ホーム', icon: '🏠' },
                 { id: 'vision', label: 'ビジョン', icon: '🎯' },
                 { id: 'dashboard', label: 'タスク管理', icon: '📊' },
+                { id: 'suggestion-box', label: 'デジタル目安箱', icon: '📮' },
             ];
 
-            const handleLogin = (e) => {
-                e.preventDefault();
-                if (password === CORRECT_PASSWORD) {
-                    setIsAuthenticated(true);
-                    setPasswordError(false);
-                    sessionStorage.setItem('auth', 'true');
-                } else {
-                    setPasswordError(true);
-                }
-            };
-
             useEffect(() => {
-                const auth = sessionStorage.getItem('auth');
-                if (auth === 'true') {
-                    setIsAuthenticated(true);
+                if (currentPage === 'dashboard') {
+                    loadTasks();
+                } else if (currentPage === 'suggestion-box') {
+                    loadSuggestions();
                 }
-            }, []);
+            }, [currentPage]);
 
-            useEffect(() => {
-                if (currentPage === 'dashboard' && isAuthenticated) {
-                    loadData();
-                }
-            }, [currentPage, isAuthenticated]);
-
-            const loadData = async () => {
+            const loadTasks = async () => {
                 setLoading(true);
                 setError(null);
                 
                 try {
-                    const response = await fetch('https://script.google.com/macros/s/AKfycby2vNpYa55_u_u-OR8mP9oDRbZIjGVtSzWhTJ3zlwA-F4G3UpKGU6uKvPBv8pNBRZZa/exec');
+                    const response = await fetch(TASKS_API_URL);
                     
                     if (!response.ok) {
                         throw new Error('データの取得に失敗しました');
@@ -130,7 +126,30 @@
                     setLastUpdated(new Date().toLocaleString('ja-JP'));
                     setError(null);
                 } catch (err) {
-                    console.error('Error loading data:', err);
+                    console.error('Error loading tasks:', err);
+                    setError('データの読み込みに失敗しました。');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const loadSuggestions = async () => {
+                setLoading(true);
+                setError(null);
+                
+                try {
+                    const response = await fetch(SUGGESTIONS_API_URL);
+                    
+                    if (!response.ok) {
+                        throw new Error('データの取得に失敗しました');
+                    }
+                    
+                    const data = await response.json();
+                    setSuggestions(data);
+                    setLastUpdated(new Date().toLocaleString('ja-JP'));
+                    setError(null);
+                } catch (err) {
+                    console.error('Error loading suggestions:', err);
                     setError('データの読み込みに失敗しました。');
                 } finally {
                     setLoading(false);
@@ -146,7 +165,9 @@
                     '審議中': 'bg-yellow-100 text-yellow-800 border-yellow-300',
                     '保留': 'bg-gray-100 text-gray-800 border-gray-300',
                     '進行中': 'bg-purple-100 text-purple-800 border-purple-300',
-                    '完了': 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                    '完了': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                    '回答済': 'bg-green-100 text-green-800 border-green-300',
+                    '実施決定': 'bg-emerald-100 text-emerald-800 border-emerald-300'
                 };
                 return colors[status] || 'bg-gray-100 text-gray-800 border-gray-300';
             };
@@ -162,17 +183,14 @@
             const getFilteredAndSortedTasks = () => {
                 let filtered = tasks;
                 
-                // カテゴリでフィルター
                 if (selectedCategory !== 'all') {
                     filtered = filtered.filter(task => task.category === selectedCategory);
                 }
                 
-                // ステータスでフィルター（複数選択可能）
                 if (selectedStatuses.length > 0) {
                     filtered = filtered.filter(task => selectedStatuses.includes(task.status));
                 }
                 
-                // 日付でソート
                 const sorted = [...filtered].sort((a, b) => {
                     const dateA = new Date(a.updated || 0);
                     const dateB = new Date(b.updated || 0);
@@ -197,11 +215,7 @@
             };
 
             const displayedTasks = getFilteredAndSortedTasks();
-            
-            // カテゴリ一覧を取得
             const categories = ['all', ...new Set(tasks.map(t => t.category).filter(Boolean))];
-            
-            // ステータス一覧
             const statuses = ['未着手', '検討中', '審議中', '進行中', '保留', '可決', '否決', '完了'];
 
             // ヘッダーコンポーネント
@@ -215,7 +229,6 @@
                                 </h1>
                             </div>
                             
-                            {/* デスクトップナビゲーション */}
                             <nav className="hidden md:flex space-x-8">
                                 {navigation.map(item => (
                                     <button
@@ -233,7 +246,6 @@
                                 ))}
                             </nav>
 
-                            {/* モバイルメニューボタン */}
                             <button
                                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                                 className="md:hidden p-2 rounded-md text-gray-700 hover:bg-gray-100"
@@ -242,7 +254,6 @@
                             </button>
                         </div>
 
-                        {/* モバイルナビゲーション */}
                         {mobileMenuOpen && (
                             <div className="md:hidden py-4 border-t border-gray-200">
                                 {navigation.map(item => (
@@ -271,7 +282,6 @@
             // ホームページ
             const HomePage = () => (
                 <div className="fade-in">
-                    {/* ヒーローセクション */}
                     <section className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-20">
                         <div className="max-w-4xl mx-auto px-4 text-center">
                             <h2 className="text-4xl sm:text-5xl font-bold mb-6">
@@ -290,7 +300,6 @@
                         </div>
                     </section>
 
-                    {/* 3つの柱 */}
                     <section className="py-16 bg-white">
                         <div className="max-w-6xl mx-auto px-4">
                             <h3 className="text-3xl font-bold text-center mb-12 text-gray-800">
@@ -305,10 +314,10 @@
                                     </p>
                                 </div>
                                 <div className="p-6 border-2 border-purple-200 rounded-lg hover:shadow-lg transition-shadow">
-                                    <div className="text-4xl mb-4">💰</div>
-                                    <h4 className="text-xl font-bold mb-3 text-gray-800">校内VC</h4>
+                                    <div className="text-4xl mb-4">📮</div>
+                                    <h4 className="text-xl font-bold mb-3 text-gray-800">デジタル目安箱</h4>
                                     <p className="text-gray-600">
-                                        生徒の企画を資金面で支援。アイデアを形にする仕組みを作ります。
+                                        匿名で意見を送れる目安箱。生徒の声を確実に届け、回答状況も公開します。
                                     </p>
                                 </div>
                                 <div className="p-6 border-2 border-pink-200 rounded-lg hover:shadow-lg transition-shadow">
@@ -322,7 +331,6 @@
                         </div>
                     </section>
 
-                    {/* CTA */}
                     <section className="py-16 bg-gray-50">
                         <div className="max-w-4xl mx-auto px-4 text-center">
                             <h3 className="text-3xl font-bold mb-6 text-gray-800">
@@ -331,23 +339,30 @@
                             <p className="text-xl text-gray-600 mb-8">
                                 私たちと一緒に、学校を、そして日本の教育を変えていきましょう
                             </p>
-                            <button
-                                onClick={() => setCurrentPage('dashboard')}
-                                className="bg-indigo-600 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-indigo-700 transition-colors shadow-lg"
-                            >
-                                活動を見る →
-                            </button>
+                            <div className="flex gap-4 justify-center flex-wrap">
+                                <button
+                                    onClick={() => setCurrentPage('suggestion-box')}
+                                    className="bg-indigo-600 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-indigo-700 transition-colors shadow-lg"
+                                >
+                                    意見を送る →
+                                </button>
+                                <button
+                                    onClick={() => setCurrentPage('dashboard')}
+                                    className="bg-white text-indigo-600 border-2 border-indigo-600 px-8 py-3 rounded-lg font-bold text-lg hover:bg-indigo-50 transition-colors shadow-lg"
+                                >
+                                    活動を見る →
+                                </button>
+                            </div>
                         </div>
                     </section>
                 </div>
             );
 
-            // ビジョンページ
+            // ビジョンページ（変更なし）
             const VisionPage = () => (
                 <div className="fade-in max-w-4xl mx-auto px-4 py-12">
                     <h2 className="text-4xl font-bold mb-8 text-gray-800">私たちのビジョン</h2>
                     
-                    {/* ビジョンステートメント */}
                     <section className="mb-12 p-8 bg-indigo-50 rounded-lg border-l-4 border-indigo-600">
                         <h3 className="text-2xl font-bold mb-4 text-indigo-900">
                             日本の教育を生徒会から変える
@@ -359,7 +374,6 @@
                         </p>
                     </section>
 
-                    {/* なぜ今、改革が必要か */}
                     <section className="mb-12">
                         <h3 className="text-2xl font-bold mb-6 text-gray-800">なぜ今、生徒会改革が必要か</h3>
                         <div className="space-y-4 text-gray-700">
@@ -375,7 +389,6 @@
                         </div>
                     </section>
 
-                    {/* ロードマップ */}
                     <section className="mb-12">
                         <h3 className="text-2xl font-bold mb-6 text-gray-800">3年間のロードマップ</h3>
                         <div className="space-y-6">
@@ -383,7 +396,7 @@
                                 <h4 className="text-xl font-bold mb-2 text-blue-900">2024-2025年：基盤づくり</h4>
                                 <ul className="list-disc list-inside text-gray-700 space-y-2">
                                     <li>タスク管理システムの構築と運用開始</li>
-                                    <li>校内VCプログラムの立ち上げ</li>
+                                    <li>デジタル目安箱の立ち上げ</li>
                                     <li>生徒会活動の完全透明化</li>
                                 </ul>
                             </div>
@@ -391,7 +404,7 @@
                                 <h4 className="text-xl font-bold mb-2 text-purple-900">2025-2026年：校内展開</h4>
                                 <ul className="list-disc list-inside text-gray-700 space-y-2">
                                     <li>全校生徒が参加できる仕組みの確立</li>
-                                    <li>校内VCからの成功事例創出</li>
+                                    <li>校内VCプログラムの立ち上げ</li>
                                     <li>他校との連携開始</li>
                                 </ul>
                             </div>
@@ -406,7 +419,6 @@
                         </div>
                     </section>
 
-                    {/* 致道館との繋がり */}
                     <section className="mb-12 p-8 bg-yellow-50 rounded-lg">
                         <h3 className="text-2xl font-bold mb-4 text-gray-800">致道館の伝統を受け継ぐ</h3>
                         <p className="text-lg text-gray-700 leading-relaxed mb-4">
@@ -420,7 +432,6 @@
                         </p>
                     </section>
 
-                    {/* CTA */}
                     <section className="text-center p-8 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg text-white">
                         <h3 className="text-2xl font-bold mb-4">
                             一緒に未来を創りませんか？
@@ -428,209 +439,150 @@
                         <p className="text-lg mb-6 opacity-90">
                             あなたのアイデアと行動が、学校を、日本を変えます
                         </p>
-                        <button
-                            onClick={() => setCurrentPage('dashboard')}
-                            className="bg-white text-indigo-600 px-8 py-3 rounded-lg font-bold hover:bg-gray-100 transition-colors"
-                        >
-                            活動状況を見る →
-                        </button>
+                        <div className="flex gap-4 justify-center flex-wrap">
+                            <button
+                                onClick={() => setCurrentPage('suggestion-box')}
+                                className="bg-white text-indigo-600 px-8 py-3 rounded-lg font-bold hover:bg-gray-100 transition-colors"
+                            >
+                                意見を送る →
+                            </button>
+                            <button
+                                onClick={() => setCurrentPage('dashboard')}
+                                className="bg-indigo-500 text-white px-8 py-3 rounded-lg font-bold hover:bg-indigo-400 transition-colors"
+                            >
+                                活動状況を見る →
+                            </button>
+                        </div>
                     </section>
                 </div>
             );
 
-            // タスク管理ページ（ログイン必要）
-            const DashboardPage = () => {
-                if (!isAuthenticated) {
-                    return (
-                        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-                            <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
-                                <div className="flex items-center justify-center mb-6">
-                                    <div className="bg-indigo-600 p-3 rounded-full w-16 h-16 flex items-center justify-center">
-                                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                        </svg>
-                                    </div>
-                                </div>
-                                <h2 className="text-2xl font-bold text-center mb-2 text-gray-800">
-                                    タスク管理システム
+            // タスク管理ページ
+            const DashboardPage = () => (
+                <div className="fade-in max-w-7xl mx-auto px-4 py-8">
+                    <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                            <div>
+                                <h2 className="text-3xl font-bold text-gray-800">
+                                    タスク管理ダッシュボード
                                 </h2>
-                                <p className="text-center text-gray-600 mb-6">
-                                    アクセスにはパスワードが必要です
-                                </p>
-                                <form onSubmit={handleLogin}>
-                                    <div className="mb-4">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            パスワード
-                                        </label>
-                                        <input
-                                            type="password"
-                                            value={password}
-                                            onChange={(e) => {
-                                                setPassword(e.target.value);
-                                                setPasswordError(false);
-                                            }}
-                                            autoFocus
-                                            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                                                passwordError 
-                                                    ? 'border-red-500 focus:ring-red-500' 
-                                                    : 'border-gray-300 focus:ring-indigo-500'
-                                            }`}
-                                            placeholder="パスワードを入力"
-                                        />
-                                        {passwordError && (
-                                            <p className="mt-2 text-sm text-red-600">
-                                                パスワードが正しくありません
-                                            </p>
-                                        )}
-                                    </div>
-                                    <button
-                                        type="submit"
-                                        className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition-colors font-medium"
-                                    >
-                                        ログイン
-                                    </button>
-                                </form>
-                                <p className="mt-6 text-xs text-center text-gray-500">
-                                    パスワードは生徒会から配布されています
+                                <p className="text-sm text-gray-600 mt-1">
+                                    生徒会の活動状況をリアルタイムで確認
                                 </p>
                             </div>
+                            <button
+                                onClick={loadTasks}
+                                disabled={loading}
+                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                            >
+                                <RefreshIcon className="w-4 h-4" spin={loading} />
+                                <span>更新</span>
+                            </button>
                         </div>
-                    );
-                }
+                        
+                        {lastUpdated && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600 mb-6">
+                                <ClockIcon className="w-4 h-4" />
+                                <span>最終更新: {lastUpdated}</span>
+                            </div>
+                        )}
 
-                return (
-                    <div className="fade-in max-w-7xl mx-auto px-4 py-8">
-                        {/* ヘッダー */}
-                        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-                                <div>
-                                    <h2 className="text-3xl font-bold text-gray-800">
-                                        タスク管理ダッシュボード
-                                    </h2>
-                                    <p className="text-sm text-gray-600 mt-1">
-                                        生徒会の活動状況をリアルタイムで確認
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    カテゴリで絞り込み
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {categories.map(cat => (
+                                        <button
+                                            key={cat}
+                                            onClick={() => setSelectedCategory(cat)}
+                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                                selectedCategory === cat
+                                                    ? 'bg-indigo-600 text-white'
+                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            {cat === 'all' ? 'すべて' : cat}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    ステータスで絞り込み（複数選択可）
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {statuses.map(status => (
+                                        <label
+                                            key={status}
+                                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors ${
+                                                selectedStatuses.includes(status)
+                                                    ? getStatusColor(status)
+                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedStatuses.includes(status)}
+                                                onChange={() => toggleStatus(status)}
+                                                className="w-4 h-4 rounded"
+                                            />
+                                            <span>{status}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    並び順
+                                </label>
+                                <select
+                                    value={sortOrder}
+                                    onChange={(e) => setSortOrder(e.target.value)}
+                                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                >
+                                    <option value="desc">新しい順</option>
+                                    <option value="asc">古い順</option>
+                                </select>
+                            </div>
+
+                            <div className="text-sm text-gray-600">
+                                {displayedTasks.length}件のタスクを表示中
+                            </div>
+                        </div>
+                    </div>
+
+                    {loading ? (
+                        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                            <RefreshIcon className="w-8 h-8 mx-auto mb-4 text-indigo-600" spin={true} />
+                            <p className="text-gray-600">読み込み中...</p>
+                        </div>
+                    ) : error ? (
+                        <div className="bg-white rounded-lg shadow-lg p-8">
+                            <div className="flex items-center gap-3 text-red-600 mb-4">
+                                <AlertIcon className="w-6 h-6" />
+                                <p className="font-medium">エラーが発生しました</p>
+                            </div>
+                            <p className="text-gray-600">{error}</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {displayedTasks.length === 0 ? (
+                                <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                                    <p className="text-gray-600">
+                                        条件に一致するタスクがありません
                                     </p>
                                 </div>
-                                <button
-                                    onClick={loadData}
-                                    disabled={loading}
-                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
-                                >
-                                    <RefreshIcon className="w-4 h-4" spin={loading} />
-                                    <span>更新</span>
-                                </button>
-                            </div>
-                            
-                            {lastUpdated && (
-                                <div className="flex items-center gap-2 text-sm text-gray-600 mb-6">
-                                    <ClockIcon className="w-4 h-4" />
-                                    <span>最終更新: {lastUpdated}</span>
-                                </div>
-                            )}
-
-                            {/* フィルター */}
-                            <div className="space-y-4">
-                                {/* カテゴリフィルター */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        カテゴリで絞り込み
-                                    </label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {categories.map(cat => (
-                                            <button
-                                                key={cat}
-                                                onClick={() => setSelectedCategory(cat)}
-                                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                                    selectedCategory === cat
-                                                        ? 'bg-indigo-600 text-white'
-                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                                }`}
-                                            >
-                                                {cat === 'all' ? 'すべて' : cat}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* ステータスフィルター（チェックボックス） */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        ステータスで絞り込み（複数選択可）
-                                    </label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {statuses.map(status => (
-                                         <label
-                                                key={status}
-                                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors ${
-                                                    selectedStatuses.includes(status)
-                                                        ? getStatusColor(status)
-                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                                }`}
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedStatuses.includes(status)}
-                                                    onChange={() => toggleStatus(status)}
-                                                    className="w-4 h-4 rounded"
-                                                />
-                                                <span>{status}</span>
-                                        </label>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* ソート */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        並び順
-                                    </label>
-                                    <select
-                                        value={sortOrder}
-                                        onChange={(e) => setSortOrder(e.target.value)}
-                                        className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    >
-                                        <option value="desc">新しい順</option>
-                                        <option value="asc">古い順</option>
-                                    </select>
-                                </div>
-
-                                {/* 表示件数 */}
-                                <div className="text-sm text-gray-600">
-                                    {displayedTasks.length}件のタスクを表示中
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* タスクリスト */}
-                        {loading ? (
-                            <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-                                <RefreshIcon className="w-8 h-8 mx-auto mb-4 text-indigo-600" spin={true} />
-                                <p className="text-gray-600">読み込み中...</p>
-                            </div>
-                        ) : error ? (
-                            <div className="bg-white rounded-lg shadow-lg p-8">
-                                <div className="flex items-center gap-3 text-red-600 mb-4">
-                                    <AlertIcon className="w-6 h-6" />
-                                    <p className="font-medium">エラーが発生しました</p>
-                                </div>
-                                <p className="text-gray-600">{error}</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                {displayedTasks.length === 0 ? (
-                                    <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-                                        <p className="text-gray-600">
-                                            条件に一致するタスクがありません
-                                        </p>
-                                    </div>
-                                ) : (
-                                    displayedTasks.map((task, index) => (
+                            ) : (
+                                displayedTasks.map((task, index) => (
                                     <div
                                         key={task.id || index}
                                         className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden"
                                     >
                                         <div className="flex flex-col sm:flex-row">
-                                            {/* 左側：IDバー */}
                                             <div className="bg-gradient-to-b from-purple-600 to-indigo-600 p-4 sm:w-24 flex items-center justify-center">
                                                 <div className="text-center">
                                                     <div className="text-white text-xs font-semibold mb-1">ID</div>
@@ -642,7 +594,6 @@
                                                 </div>
                                             </div>
 
-                                            {/* 中央：タスク情報 */}
                                             <div className="flex-grow p-4">
                                                 {task.category && (
                                                     <div className="mb-2">
@@ -676,7 +627,6 @@
                                                 </div>
                                             </div>
 
-                                            {/* 右側：詳細ボタン */}
                                             {isValidUrl(task.url) && (
                                                 <div className="p-4 flex items-center justify-center border-t sm:border-t-0 sm:border-l border-gray-100">
                                                     <a
@@ -692,14 +642,142 @@
                                             )}
                                         </div>
                                     </div>
-                                )))}
+                                ))
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+
+            // デジタル目安箱ページ
+            const SuggestionBoxPage = () => (
+                <div className="fade-in max-w-7xl mx-auto px-4 py-8">
+                    {/* 投稿フォームセクション */}
+                    <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg shadow-lg p-8 mb-8 text-white">
+                        <div className="max-w-3xl mx-auto text-center">
+                            <MessageIcon className="w-16 h-16 mx-auto mb-4" />
+                            <h2 className="text-3xl font-bold mb-4">
+                                デジタル目安箱
+                            </h2>
+                            <p className="text-lg mb-6 opacity-90">
+                                あなたの声を聞かせてください。匿名で意見や要望を送ることができます。<br />
+                                生徒会は全ての意見に真摯に向き合い、回答を公開します。
+                            </p>
+                            <a
+                                href={GOOGLE_FORM_URL}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 bg-white text-indigo-600 px-8 py-3 rounded-lg font-bold text-lg hover:bg-gray-100 transition-colors shadow-lg"
+                            >
+                                <MessageIcon className="w-5 h-5" />
+                                <span>意見を送る</span>
+                                <ExternalLinkIcon className="w-4 h-4" />
+                            </a>
+                        </div>
+                    </div>
+
+                    {/* 回答状況セクション */}
+                    <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                            <div>
+                                <h3 className="text-2xl font-bold text-gray-800">
+                                    回答状況
+                                </h3>
+                                <p className="text-sm text-gray-600 mt-1">
+                                    生徒会からの回答を確認できます
+                                </p>
+                            </div>
+                            <button
+                                onClick={loadSuggestions}
+                                disabled={loading}
+                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                            >
+                                <RefreshIcon className="w-4 h-4" spin={loading} />
+                                <span>更新</span>
+                            </button>
+                        </div>
+                        
+                        {lastUpdated && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                                <ClockIcon className="w-4 h-4" />
+                                <span>最終更新: {lastUpdated}</span>
                             </div>
                         )}
                     </div>
-                );
-            };
 
-            // メインレンダリング
+                    {loading ? (
+                        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                            <RefreshIcon className="w-8 h-8 mx-auto mb-4 text-indigo-600" spin={true} />
+                            <p className="text-gray-600">読み込み中...</p>
+                        </div>
+                    ) : error ? (
+                        <div className="bg-white rounded-lg shadow-lg p-8">
+                            <div className="flex items-center gap-3 text-red-600 mb-4">
+                                <AlertIcon className="w-6 h-6" />
+                                <p className="font-medium">エラーが発生しました</p>
+                            </div>
+                            <p className="text-gray-600">{error}</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {suggestions.length === 0 ? (
+                                <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                                    <MessageIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                                    <p className="text-gray-600">
+                                        まだ回答済みの意見はありません
+                                    </p>
+                                </div>
+                            ) : (
+                                suggestions.map((suggestion) => (
+                                    <div
+                                        key={suggestion.id}
+                                        className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6"
+                                    >
+                                        <div className="flex items-start gap-4 mb-4">
+                                            <div className="flex-shrink-0">
+                                                <div className="bg-indigo-100 text-indigo-600 rounded-lg px-4 py-2 font-bold">
+                                                    ID: {suggestion.id}
+                                                </div>
+                                            </div>
+                                            <div className="flex-grow">
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <span className="inline-block bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full border border-blue-200">
+                                                        📁 {suggestion.category}
+                                                    </span>
+                                                    <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getStatusColor(suggestion.status)}`}>
+                                                        {suggestion.status}
+                                                    </span>
+                                                </div>
+                                                <p className="text-gray-700 mb-3 leading-relaxed">
+                                                    {suggestion.summary}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {suggestion.response && (
+                                            <div className="bg-gray-50 rounded-lg p-4 border-l-4 border-indigo-600">
+                                                <div className="text-sm font-semibold text-gray-700 mb-2">
+                                                    生徒会からの回答:
+                                                </div>
+                                                <p className="text-gray-700 leading-relaxed">
+                                                    {suggestion.response}
+                                                </p>
+                                                {suggestion.timestamp && (
+                                                    <div className="flex items-center gap-1 text-xs text-gray-500 mt-2">
+                                                        <ClockIcon className="w-3 h-3" />
+                                                        <span>投稿日: {suggestion.timestamp}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+
             return (
                 <div className="min-h-screen bg-gray-50">
                     <Header />
@@ -707,16 +785,16 @@
                         {currentPage === 'home' && <HomePage />}
                         {currentPage === 'vision' && <VisionPage />}
                         {currentPage === 'dashboard' && <DashboardPage />}
+                        {currentPage === 'suggestion-box' && <SuggestionBoxPage />}
                     </main>
                     
-                    {/* フッター */}
                     <footer className="bg-gray-800 text-white py-8 mt-12">
                         <div className="max-w-7xl mx-auto px-4 text-center">
                             <p className="text-sm">
                                 © 2024-2025 致道館高校生徒会 | 日本の教育を生徒会から変える
                             </p>
                             <p className="text-xs mt-2 text-gray-400">
-                                ご意見・ご質問は生徒会室までお願いします
+                                ご意見・ご質問は生徒会室またはデジタル目安箱までお願いします
                             </p>
                         </div>
                     </footer>
@@ -729,4 +807,3 @@
     </script>
 </body>
 </html>
-                                               
