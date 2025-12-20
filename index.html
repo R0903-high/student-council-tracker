@@ -73,18 +73,19 @@
             </svg>
         );
 
-        const StudentCouncilSite = () => {
-            const [currentPage, setCurrentPage] = useState('home');
-            const [tasks, setTasks] = useState([]);
-            const [suggestions, setSuggestions] = useState([]);
-            const [loading, setLoading] = useState(false);
-            const [error, setError] = useState(null);
-            const [lastUpdated, setLastUpdated] = useState(null);
-            const [selectedStatuses, setSelectedStatuses] = useState([]);
-            const [sortOrder, setSortOrder] = useState('desc');
-            const [selectedCategory, setSelectedCategory] = useState('all');
-            const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
+    const StudentCouncilSite = () => {
+     const [currentPage, setCurrentPage] = useState('home');
+     const [tasks, setTasks] = useState([]);
+     const [suggestions, setSuggestions] = useState([]);
+     const [loading, setLoading] = useState(false);
+     const [error, setError] = useState(null);
+     const [lastUpdated, setLastUpdated] = useState(null);
+     const [selectedStatuses, setSelectedStatuses] = useState([]);
+     const [sortOrder, setSortOrder] = useState('desc');
+     const [selectedCategory, setSelectedCategory] = useState('all');
+     const [suggestionStatusFilter, setSuggestionStatusFilter] = useState('all'); // ← 追加
+     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+ 
             // タスク管理のAPI URL（既存）
             const TASKS_API_URL = 'https://script.google.com/macros/s/AKfycby2vNpYa55_u_u-OR8mP9oDRbZIjGVtSzWhTJ3zlwA-F4G3UpKGU6uKvPBv8pNBRZZa/exec';
             
