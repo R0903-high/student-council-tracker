@@ -31,71 +31,66 @@
         const { useState, useEffect } = React;
 
         // アイコンコンポーネント
-        const RefreshIcon = ({ className, spin }) => (
+        const RefreshIcon = ({ className = "", spin = false }) => (
             <svg className={className + (spin ? ' animate-spin' : '')} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
         );
 
-        const ExternalLinkIcon = ({ className }) => (
+        const ExternalLinkIcon = ({ className = "" }) => (
             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
         );
 
-        const ClockIcon = ({ className }) => (
+        const ClockIcon = ({ className = "" }) => (
             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
         );
 
-        const AlertIcon = ({ className }) => (
+        const AlertIcon = ({ className = "" }) => (
             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
         );
 
-        const MenuIcon = ({ className }) => (
+        const MenuIcon = ({ className = "" }) => (
             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
         );
 
-        const CloseIcon = ({ className }) => (
+        const CloseIcon = ({ className = "" }) => (
             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
         );
 
-        const MessageIcon = ({ className }) => (
+        const MessageIcon = ({ className = "" }) => (
             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
             </svg>
         );
 
-    const StudentCouncilSite = () => {
-     const [currentPage, setCurrentPage] = useState('home');
-     const [tasks, setTasks] = useState([]);
-     const [suggestions, setSuggestions] = useState([]);
-     const [loading, setLoading] = useState(false);
-     const [error, setError] = useState(null);
-     const [lastUpdated, setLastUpdated] = useState(null);
-     const [selectedStatuses, setSelectedStatuses] = useState([]);
-     const [sortOrder, setSortOrder] = useState('desc');
-     const [selectedCategory, setSelectedCategory] = useState('all');
-     const [suggestionStatusFilter, setSuggestionStatusFilter] = useState('all'); // ← 追加
-     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+        const StudentCouncilSite = () => {
+            const [currentPage, setCurrentPage] = useState('home');
+            const [tasks, setTasks] = useState([]);
+            const [suggestions, setSuggestions] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const [lastUpdated, setLastUpdated] = useState(null);
+            const [selectedStatuses, setSelectedStatuses] = useState([]);
+            const [sortOrder, setSortOrder] = useState('desc');
+            const [selectedCategory, setSelectedCategory] = useState('all');
+            const [suggestionStatusFilter, setSuggestionStatusFilter] = useState('all');
+            const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
  
-            // タスク管理のAPI URL（既存）
+            // API URLs
             const TASKS_API_URL = 'https://script.google.com/macros/s/AKfycby2vNpYa55_u_u-OR8mP9oDRbZIjGVtSzWhTJ3zlwA-F4G3UpKGU6uKvPBv8pNBRZZa/exec';
-            
-            // デジタル目安箱のAPI URL（新しく作成したGoogle Apps ScriptのURLに置き換えてください）
             const SUGGESTIONS_API_URL = 'https://script.google.com/macros/s/AKfycbw9GVeYuWo5ree_-cRL7uu3dv6rFqnNQP2kYUwDeUIta1q5xBhQ1vAXqkthQ_9lXj2d/exec';
-            
-            // Google FormのURL（実際のURLに置き換えてください）
             const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfAGjeQkSGIWRo5EuGv_aFKI1oxIEHL6kE5vyAs2pUl_yyFGQ/viewform?usp=header';
 
-            // ナビゲーション
             const navigation = [
                 { id: 'home', label: 'ホーム', icon: '🏠' },
                 { id: 'vision', label: 'ビジョン', icon: '🎯' },
@@ -123,12 +118,13 @@
                     }
                     
                     const data = await response.json();
-                    setTasks(data);
+                    setTasks(Array.isArray(data) ? data : []);
                     setLastUpdated(new Date().toLocaleString('ja-JP'));
                     setError(null);
                 } catch (err) {
                     console.error('Error loading tasks:', err);
-                    setError('データの読み込みに失敗しました。');
+                    setError('データの読み込みに失敗しました。しばらくしてから再度お試しください。');
+                    setTasks([]);
                 } finally {
                     setLoading(false);
                 }
@@ -146,12 +142,13 @@
                     }
                     
                     const data = await response.json();
-                    setSuggestions(data);
+                    setSuggestions(Array.isArray(data) ? data : []);
                     setLastUpdated(new Date().toLocaleString('ja-JP'));
                     setError(null);
                 } catch (err) {
                     console.error('Error loading suggestions:', err);
-                    setError('データの読み込みに失敗しました。');
+                    setError('データの読み込みに失敗しました。しばらくしてから再度お試しください。');
+                    setSuggestions([]);
                 } finally {
                     setLoading(false);
                 }
@@ -176,7 +173,6 @@
                 return colors[status] || 'bg-gray-100 text-gray-800 border-gray-300';
             };
 
-
             const toggleStatus = (status) => {
                 setSelectedStatuses(prev => 
                     prev.includes(status) 
@@ -186,7 +182,7 @@
             };
 
             const getFilteredAndSortedTasks = () => {
-                let filtered = tasks;
+                let filtered = [...tasks];
                 
                 if (selectedCategory !== 'all') {
                     filtered = filtered.filter(task => task.category === selectedCategory);
@@ -196,7 +192,7 @@
                     filtered = filtered.filter(task => selectedStatuses.includes(task.status));
                 }
                 
-                const sorted = [...filtered].sort((a, b) => {
+                const sorted = filtered.sort((a, b) => {
                     const dateA = new Date(a.updated || 0);
                     const dateB = new Date(b.updated || 0);
                     return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
@@ -363,7 +359,7 @@
                 </div>
             );
 
-            // ビジョンページ（変更なし）
+            // ビジョンページ
             const VisionPage = () => (
                 <div className="fade-in max-w-4xl mx-auto px-4 py-12">
                     <h2 className="text-4xl font-bold mb-8 text-gray-800">私たちのビジョン</h2>
@@ -655,196 +651,202 @@
             );
 
             // デジタル目安箱ページ
-        const SuggestionBoxPage = () => (
-    <div className="fade-in max-w-7xl mx-auto px-4 py-8">
-        {/* 投稿フォームセクション */}
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg shadow-lg p-8 mb-8 text-white">
-            <div className="max-w-3xl mx-auto text-center">
-                <MessageIcon className="w-16 h-16 mx-auto mb-4" />
-                <h2 className="text-3xl font-bold mb-4">
-                    デジタル目安箱
-                </h2>
-                <p className="text-lg mb-6 opacity-90">
-                    あなたの声を聞かせてください。匿名で意見や要望を送ることができます。<br />
-                    生徒会は全ての意見に真摯に向き合い、対応状況を公開します。
-                </p>
-                <a
-                    href={GOOGLE_FORM_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 bg-white text-indigo-600 px-8 py-3 rounded-lg font-bold text-lg hover:bg-gray-100 transition-colors shadow-lg"
-                >
-                    <MessageIcon className="w-5 h-5" />
-                    <span>意見を送る</span>
-                    <ExternalLinkIcon className="w-4 h-4" />
-                </a>
-            </div>
-        </div>
+            const SuggestionBoxPage = () => {
+                const filteredSuggestions = suggestionStatusFilter === 'all' 
+                    ? suggestions 
+                    : suggestions.filter(s => s.status === suggestionStatusFilter);
 
-        {/* 回答状況セクション */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-                <div>
-                    <h3 className="text-2xl font-bold text-gray-800">
-                        投稿状況
-                    </h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                        生徒会への意見・要望の対応状況
-                    </p>
-                </div>
-                <button
-                    onClick={loadSuggestions}
-                    disabled={loading}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
-                >
-                    <RefreshIcon className="w-4 h-4" spin={loading} />
-                    <span>更新</span>
-                </button>
-            </div>
-            
-            {lastUpdated && (
-                <div className="flex items-center gap-2 text-sm text-gray-600 mb-6">
-                    <ClockIcon className="w-4 h-4" />
-                    <span>最終更新: {lastUpdated}</span>
-                </div>
-            )}
-
-            {/* ステータスフィルター */}
-            <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                    ステータスで絞り込み
-                </label>
-                <div className="flex flex-wrap gap-2">
-                    {['すべて', '未確認', '検討中', '回答作成中', '回答済', '実施決定', '対応不可'].map(status => (
-                        <button
-                            key={status}
-                            onClick={() => setSuggestionStatusFilter(status === 'すべて' ? 'all' : status)}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                (status === 'すべて' && suggestionStatusFilter === 'all') ||
-                                suggestionStatusFilter === status
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            {status}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* 件数表示 */}
-            <div className="text-sm text-gray-600">
-                {(() => {
-                    const filteredCount = suggestionStatusFilter === 'all' 
-                        ? suggestions.length 
-                        : suggestions.filter(s => s.status === suggestionStatusFilter).length;
-                    return `${filteredCount}件の投稿を表示中`;
-                })()}
-            </div>
-        </div>
-
-        {/* 投稿リスト */}
-        {loading ? (
-            <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-                <RefreshIcon className="w-8 h-8 mx-auto mb-4 text-indigo-600" spin={true} />
-                <p className="text-gray-600">読み込み中...</p>
-            </div>
-        ) : error ? (
-            <div className="bg-white rounded-lg shadow-lg p-8">
-                <div className="flex items-center gap-3 text-red-600 mb-4">
-                    <AlertIcon className="w-6 h-6" />
-                    <p className="font-medium">エラーが発生しました</p>
-                </div>
-                <p className="text-gray-600">{error}</p>
-            </div>
-        ) : (
-            <div className="space-y-4">
-                {(() => {
-                    // ステータスでフィルター
-                    const filteredSuggestions = suggestionStatusFilter === 'all' 
-                        ? suggestions 
-                        : suggestions.filter(s => s.status === suggestionStatusFilter);
-                    
-                    return filteredSuggestions.length === 0 ? (
-                        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-                            <MessageIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                            <p className="text-gray-600">
-                                {suggestionStatusFilter === 'all' 
-                                    ? 'まだ投稿がありません' 
-                                    : `「${suggestionStatusFilter}」の投稿はありません`}
-                            </p>
+                return (
+                    <div className="fade-in max-w-7xl mx-auto px-4 py-8">
+                        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg shadow-lg p-8 mb-8 text-white">
+                            <div className="max-w-3xl mx-auto text-center">
+                                <MessageIcon className="w-16 h-16 mx-auto mb-4" />
+                                <h2 className="text-3xl font-bold mb-4">
+                                    デジタル目安箱
+                                </h2>
+                                <p className="text-lg mb-6 opacity-90">
+                                    あなたの声を聞かせてください。匿名で意見や要望を送ることができます。<br />
+                                    生徒会は全ての意見に真摯に向き合い、対応状況を公開します。
+                                </p>
+                                <a
+                                    href={GOOGLE_FORM_URL}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 bg-white text-indigo-600 px-8 py-3 rounded-lg font-bold text-lg hover:bg-gray-100 transition-colors shadow-lg"
+                                >
+                                    <MessageIcon className="w-5 h-5" />
+                                    <span>意見を送る</span>
+                                    <ExternalLinkIcon className="w-4 h-4" />
+                                </a>
+                            </div>
                         </div>
-                    ) : (
-                        filteredSuggestions.map((suggestion) => (
-                            <div
-                                key={suggestion.id}
-                                className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6"
-                            >
-                                <div className="flex items-start gap-4 mb-4">
-                                    <div className="flex-shrink-0">
-                                        <div className="bg-indigo-100 text-indigo-600 rounded-lg px-4 py-2 font-bold">
-                                            ID: {suggestion.id}
-                                        </div>
+
+                        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                                <div>
+                                    <h3 className="text-2xl font-bold text-gray-800">
+                                        投稿状況
+                                    </h3>
+                                    <p className="text-sm text-gray-600 mt-1">
+                                        生徒会への意見・要望の対応状況
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={loadSuggestions}
+                                    disabled={loading}
+                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                                >
+                                    <RefreshIcon className="w-4 h-4" spin={loading} />
+                                    <span>更新</span>
+                                </button>
+                            </div>
+                            
+                            {lastUpdated && (
+                                <div className="flex items-center gap-2 text-sm text-gray-600 mb-6">
+                                    <ClockIcon className="w-4 h-4" />
+                                    <span>最終更新: {lastUpdated}</span>
+                                </div>
+                            )}
+
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    ステータスで絞り込み
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {['すべて', '未確認', '検討中', '回答作成中', '回答済', '実施決定', '対応不可'].map(status => (
+                                        <button
+                                            key={status}
+                                            onClick={() => setSuggestionStatusFilter(status === 'すべて' ? 'all' : status)}
+                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                                (status === 'すべて' && suggestionStatusFilter === 'all') ||
+                                                suggestionStatusFilter === status
+                                                    ? 'bg-indigo-600 text-white'
+                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            {status}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="text-sm text-gray-600">
+                                {filteredSuggestions.length}件の投稿を表示中
+                            </div>
+                        </div>
+
+                        {loading ? (
+                            <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                                <RefreshIcon className="w-8 h-8 mx-auto mb-4 text-indigo-600" spin={true} />
+                                <p className="text-gray-600">読み込み中...</p>
+                            </div>
+                        ) : error ? (
+                            <div className="bg-white rounded-lg shadow-lg p-8">
+                                <div className="flex items-center gap-3 text-red-600 mb-4">
+                                    <AlertIcon className="w-6 h-6" />
+                                    <p className="font-medium">エラーが発生しました</p>
+                                </div>
+                                <p className="text-gray-600">{error}</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {filteredSuggestions.length === 0 ? (
+                                    <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                                        <MessageIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                                        <p className="text-gray-600">
+                                            {suggestionStatusFilter === 'all' 
+                                                ? 'まだ投稿がありません' 
+                                                : `「${suggestionStatusFilter}」の投稿はありません`}
+                                        </p>
                                     </div>
-                                    <div className="flex-grow">
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <span className="inline-block bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full border border-blue-200">
-                                                📁 {suggestion.category}
-                                            </span>
-                                            <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getStatusColor(suggestion.status)}`}>
-                                                {suggestion.status}
-                                            </span>
-                                            {suggestion.timestamp && (
-                                                <div className="flex items-center gap-1 text-xs text-gray-500">
-                                                    <ClockIcon className="w-3 h-3" />
-                                                    <span>投稿: {suggestion.timestamp}</span>
+                                ) : (
+                                    filteredSuggestions.map((suggestion) => (
+                                        <div
+                                            key={suggestion.id}
+                                            className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6"
+                                        >
+                                            <div className="flex items-start gap-4 mb-4">
+                                                <div className="flex-shrink-0">
+                                                    <div className="bg-indigo-100 text-indigo-600 rounded-lg px-4 py-2 font-bold">
+                                                        ID: {suggestion.id}
+                                                    </div>
+                                                </div>
+                                                <div className="flex-grow">
+                                                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                                        {suggestion.category && (
+                                                            <span className="inline-block bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full border border-blue-200">
+                                                                📁 {suggestion.category}
+                                                            </span>
+                                                        )}
+                                                        <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getStatusColor(suggestion.status)}`}>
+                                                            {suggestion.status}
+                                                        </span>
+                                                        {suggestion.timestamp && (
+                                                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                                                                <ClockIcon className="w-3 h-3" />
+                                                                <span>投稿: {suggestion.timestamp}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-gray-700 mb-3 leading-relaxed">
+                                                        {suggestion.summary}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {suggestion.response && (
+                                                <div className="bg-gray-50 rounded-lg p-4 border-l-4 border-indigo-600">
+                                                    <div className="text-sm font-semibold text-gray-700 mb-2">
+                                                        生徒会からの回答:
+                                                    </div>
+                                                    <p className="text-gray-700 leading-relaxed">
+                                                        {suggestion.response}
+                                                    </p>
+                                                    {suggestion.responseDate && (
+                                                        <div className="flex items-center gap-1 text-xs text-gray-500 mt-2">
+                                                            <ClockIcon className="w-3 h-3" />
+                                                            <span>回答日: {suggestion.responseDate}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {!suggestion.response && suggestion.status !== '未確認' && (
+                                                <div className="bg-yellow-50 rounded-lg p-4 border-l-4 border-yellow-400">
+                                                    <p className="text-sm text-yellow-800">
+                                                        現在対応中です。もうしばらくお待ちください。
+                                                    </p>
                                                 </div>
                                             )}
                                         </div>
-                                        <p className="text-gray-700 mb-3 leading-relaxed">
-                                            {suggestion.summary}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* 回答がある場合のみ表示 */}
-                                {suggestion.response && (
-                                    <div className="bg-gray-50 rounded-lg p-4 border-l-4 border-indigo-600">
-                                        <div className="text-sm font-semibold text-gray-700 mb-2">
-                                            生徒会からの回答:
-                                        </div>
-                                        <p className="text-gray-700 leading-relaxed">
-                                            {suggestion.response}
-                                        </p>
-                                        {suggestion.responseDate && (
-                                            <div className="flex items-center gap-1 text-xs text-gray-500 mt-2">
-                                                <ClockIcon className="w-3 h-3" />
-                                                <span>回答日: {suggestion.responseDate}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* 回答がまだない場合 */}
-                                {!suggestion.response && suggestion.status !== '未確認' && (
-                                    <div className="bg-yellow-50 rounded-lg p-4 border-l-4 border-yellow-400">
-                                        <p className="text-sm text-yellow-800">
-                                            現在対応中です。もうしばらくお待ちください。
-                                        </p>
-                                    </div>
+                                    ))
                                 )}
                             </div>
-                        ))
-                    );
-                })()}
-            </div>
-        )}
-    </div>
-);
-            
+                        )}
+                    </div>
+                );
+            };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<StudentCouncilSite />);
+            // メインレンダー
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    <Header />
+                    <main>
+                        {currentPage === 'home' && <HomePage />}
+                        {currentPage === 'vision' && <VisionPage />}
+                        {currentPage === 'dashboard' && <DashboardPage />}
+                        {currentPage === 'suggestion-box' && <SuggestionBoxPage />}
+                    </main>
+                </div>
+            );
+        };
+
+        // アプリケーションのレンダリング
+        const rootElement = document.getElementById('root');
+        if (rootElement) {
+            const root = ReactDOM.createRoot(rootElement);
+            root.render(<StudentCouncilSite />);
+        }
     </script>
 </body>
 </html>
