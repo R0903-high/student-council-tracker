@@ -73,10 +73,17 @@
             </svg>
         );
 
+        const BellIcon = ({ className = "" }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+        );
+
         const StudentCouncilSite = () => {
             const [currentPage, setCurrentPage] = useState('home');
             const [tasks, setTasks] = useState([]);
             const [suggestions, setSuggestions] = useState([]);
+            const [announcements, setAnnouncements] = useState([]);
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
             const [lastUpdated, setLastUpdated] = useState(null);
@@ -84,17 +91,20 @@
             const [sortOrder, setSortOrder] = useState('desc');
             const [selectedCategory, setSelectedCategory] = useState('all');
             const [suggestionStatusFilter, setSuggestionStatusFilter] = useState('all');
+            const [announcementCategoryFilter, setAnnouncementCategoryFilter] = useState('all');
             const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
  
             // API URLs
             const TASKS_API_URL = 'https://script.google.com/macros/s/AKfycby2vNpYa55_u_u-OR8mP9oDRbZIjGVtSzWhTJ3zlwA-F4G3UpKGU6uKvPBv8pNBRZZa/exec';
             const SUGGESTIONS_API_URL = 'https://script.google.com/macros/s/AKfycbw9GVeYuWo5ree_-cRL7uu3dv6rFqnNQP2kYUwDeUIta1q5xBhQ1vAXqkthQ_9lXj2d/exec';
+            const ANNOUNCEMENTS_API_URL = 'YOUR_ANNOUNCEMENTS_API_URL_HERE'; // 連絡掲示板のAPI URLに置き換えてください
             const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfAGjeQkSGIWRo5EuGv_aFKI1oxIEHL6kE5vyAs2pUl_yyFGQ/viewform?usp=header';
 
             const navigation = [
                 { id: 'home', label: 'ホーム', icon: '🏠' },
                 { id: 'vision', label: 'ビジョン', icon: '🎯' },
                 { id: 'dashboard', label: 'タスク管理', icon: '📊' },
+                { id: 'announcements', label: '連絡掲示板', icon: '📢' },
                 { id: 'suggestion-box', label: 'デジタル目安箱', icon: '📮' },
             ];
 
@@ -103,6 +113,10 @@
                     loadTasks();
                 } else if (currentPage === 'suggestion-box') {
                     loadSuggestions();
+                } else if (currentPage === 'announcements') {
+                    loadAnnouncements();
+                } else if (currentPage === 'home') {
+                    loadAnnouncements(); // ホームページでも最新連絡を表示
                 }
             }, [currentPage]);
 
@@ -154,6 +168,30 @@
                 }
             };
 
+            const loadAnnouncements = async () => {
+                setLoading(true);
+                setError(null);
+                
+                try {
+                    const response = await fetch(ANNOUNCEMENTS_API_URL);
+                    
+                    if (!response.ok) {
+                        throw new Error('データの取得に失敗しました');
+                    }
+                    
+                    const data = await response.json();
+                    setAnnouncements(Array.isArray(data) ? data : []);
+                    setLastUpdated(new Date().toLocaleString('ja-JP'));
+                    setError(null);
+                } catch (err) {
+                    console.error('Error loading announcements:', err);
+                    setError('データの読み込みに失敗しました。しばらくしてから再度お試しください。');
+                    setAnnouncements([]);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
             const getStatusColor = (status) => {
                 const colors = {
                     '未着手': 'bg-slate-100 text-slate-800 border-slate-300',
@@ -171,6 +209,42 @@
                     '対応不可': 'bg-red-100 text-red-800 border-red-300'
                 };
                 return colors[status] || 'bg-gray-100 text-gray-800 border-gray-300';
+            };
+
+            const getCategoryColor = (category) => {
+                const colors = {
+                    '総会': 'bg-blue-100 text-blue-800 border-blue-300',
+                    'イベント': 'bg-green-100 text-green-800 border-green-300',
+                    'お知らせ': 'bg-gray-100 text-gray-800 border-gray-300',
+                    '緊急': 'bg-red-100 text-red-800 border-red-300'
+                };
+                return colors[category] || 'bg-gray-100 text-gray-800 border-gray-300';
+            };
+
+            const getCategoryIcon = (category) => {
+                const icons = {
+                    '総会': '👥',
+                    'イベント': '🎉',
+                    'お知らせ': '📋',
+                    '緊急': '🚨'
+                };
+                return icons[category] || '📋';
+            };
+
+            const getRelativeTime = (dateString) => {
+                if (!dateString) return '';
+                
+                const date = new Date(dateString);
+                const now = new Date();
+                const diffTime = now - date;
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (diffDays === 0) return '今日';
+                if (diffDays === 1) return '昨日';
+                if (diffDays < 7) return `${diffDays}日前`;
+                if (diffDays < 30) return `${Math.floor(diffDays / 7)}週間前`;
+                if (diffDays < 365) return `${Math.floor(diffDays / 30)}ヶ月前`;
+                return dateString;
             };
 
             const toggleStatus = (status) => {
@@ -230,7 +304,7 @@
                                 </h1>
                             </div>
                             
-                            <nav className="hidden md:flex space-x-8">
+                            <nav className="hidden md:flex space-x-4">
                                 {navigation.map(item => (
                                     <button
                                         key={item.id}
@@ -281,83 +355,139 @@
             );
 
             // ホームページ
-            const HomePage = () => (
-                <div className="fade-in">
-                    <section className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-20">
-                        <div className="max-w-4xl mx-auto px-4 text-center">
-                            <h2 className="text-4xl sm:text-5xl font-bold mb-6">
-                                日本の教育を<br className="sm:hidden" />生徒会から変える
-                            </h2>
-                            <p className="text-xl sm:text-2xl mb-8 opacity-90">
-                                致道館の自学自習の伝統を継承し、<br className="sm:hidden" />
-                                民主的な学校運営を実現する
-                            </p>
-                            <button
-                                onClick={() => setCurrentPage('vision')}
-                                className="bg-white text-indigo-600 px-8 py-3 rounded-lg font-bold text-lg hover:bg-gray-100 transition-colors shadow-lg"
-                            >
-                                ビジョンを見る →
-                            </button>
-                        </div>
-                    </section>
-
-                    <section className="py-16 bg-white">
-                        <div className="max-w-6xl mx-auto px-4">
-                            <h3 className="text-3xl font-bold text-center mb-12 text-gray-800">
-                                私たちの取り組み
-                            </h3>
-                            <div className="grid md:grid-cols-3 gap-8">
-                                <div className="p-6 border-2 border-indigo-200 rounded-lg hover:shadow-lg transition-shadow">
-                                    <div className="text-4xl mb-4">🔍</div>
-                                    <h4 className="text-xl font-bold mb-3 text-gray-800">透明化</h4>
-                                    <p className="text-gray-600">
-                                        生徒会の活動をすべて可視化。タスク管理システムで誰もが進捗を確認できます。
-                                    </p>
-                                </div>
-                                <div className="p-6 border-2 border-purple-200 rounded-lg hover:shadow-lg transition-shadow">
-                                    <div className="text-4xl mb-4">📮</div>
-                                    <h4 className="text-xl font-bold mb-3 text-gray-800">デジタル目安箱</h4>
-                                    <p className="text-gray-600">
-                                        匿名で意見を送れる目安箱。生徒の声を確実に届け、回答状況も公開します。
-                                    </p>
-                                </div>
-                                <div className="p-6 border-2 border-pink-200 rounded-lg hover:shadow-lg transition-shadow">
-                                    <div className="text-4xl mb-4">🌏</div>
-                                    <h4 className="text-xl font-bold mb-3 text-gray-800">全国展開</h4>
-                                    <p className="text-gray-600">
-                                        致道館のモデルを全国の高校に展開。日本中の生徒会を変革します。
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section className="py-16 bg-gray-50">
-                        <div className="max-w-4xl mx-auto px-4 text-center">
-                            <h3 className="text-3xl font-bold mb-6 text-gray-800">
-                                あなたも参加しませんか？
-                            </h3>
-                            <p className="text-xl text-gray-600 mb-8">
-                                私たちと一緒に、学校を、そして日本の教育を変えていきましょう
-                            </p>
-                            <div className="flex gap-4 justify-center flex-wrap">
+            const HomePage = () => {
+                const latestAnnouncements = announcements.slice(0, 5);
+                
+                return (
+                    <div className="fade-in">
+                        <section className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-20">
+                            <div className="max-w-4xl mx-auto px-4 text-center">
+                                <h2 className="text-4xl sm:text-5xl font-bold mb-6">
+                                    日本の教育を<br className="sm:hidden" />生徒会から変える
+                                </h2>
+                                <p className="text-xl sm:text-2xl mb-8 opacity-90">
+                                    致道館の自学自習の伝統を継承し、<br className="sm:hidden" />
+                                    民主的な学校運営を実現する
+                                </p>
                                 <button
-                                    onClick={() => setCurrentPage('suggestion-box')}
-                                    className="bg-indigo-600 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-indigo-700 transition-colors shadow-lg"
+                                    onClick={() => setCurrentPage('vision')}
+                                    className="bg-white text-indigo-600 px-8 py-3 rounded-lg font-bold text-lg hover:bg-gray-100 transition-colors shadow-lg"
                                 >
-                                    意見を送る →
-                                </button>
-                                <button
-                                    onClick={() => setCurrentPage('dashboard')}
-                                    className="bg-white text-indigo-600 border-2 border-indigo-600 px-8 py-3 rounded-lg font-bold text-lg hover:bg-indigo-50 transition-colors shadow-lg"
-                                >
-                                    活動を見る →
+                                    ビジョンを見る →
                                 </button>
                             </div>
-                        </div>
-                    </section>
-                </div>
-            );
+                        </section>
+
+                        {/* 最新連絡セクション */}
+                        {latestAnnouncements.length > 0 && (
+                            <section className="py-12 bg-gray-50">
+                                <div className="max-w-6xl mx-auto px-4">
+                                    <div className="flex items-center justify-between mb-6">
+                                        <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                            <BellIcon className="w-6 h-6 text-indigo-600" />
+                                            最新連絡
+                                        </h3>
+                                        <button
+                                            onClick={() => setCurrentPage('announcements')}
+                                            className="text-indigo-600 hover:text-indigo-700 font-medium text-sm flex items-center gap-1"
+                                        >
+                                            もっと見る →
+                                        </button>
+                                    </div>
+                                    <div className="space-y-3">
+                                        {latestAnnouncements.map((announcement) => (
+                                            <div
+                                                key={announcement.id}
+                                                className={`bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow border-l-4 ${
+                                                    announcement.category === '緊急' 
+                                                        ? 'border-red-500' 
+                                                        : 'border-indigo-500'
+                                                }`}
+                                            >
+                                                <div className="flex items-start gap-3">
+                                                    <span className="text-2xl">{getCategoryIcon(announcement.category)}</span>
+                                                    <div className="flex-grow">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <span className={`px-2 py-1 rounded text-xs font-medium ${getCategoryColor(announcement.category)}`}>
+                                                                {announcement.category}
+                                                            </span>
+                                                            <span className="text-xs text-gray-500">
+                                                                {getRelativeTime(announcement.date)}
+                                                            </span>
+                                                        </div>
+                                                        <h4 className="font-bold text-gray-800 mb-1">
+                                                            {announcement.title}
+                                                        </h4>
+                                                        <p className="text-sm text-gray-600 line-clamp-2">
+                                                            {announcement.content}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </section>
+                        )}
+
+                        <section className="py-16 bg-white">
+                            <div className="max-w-6xl mx-auto px-4">
+                                <h3 className="text-3xl font-bold text-center mb-12 text-gray-800">
+                                    私たちの取り組み
+                                </h3>
+                                <div className="grid md:grid-cols-3 gap-8">
+                                    <div className="p-6 border-2 border-indigo-200 rounded-lg hover:shadow-lg transition-shadow">
+                                        <div className="text-4xl mb-4">🔍</div>
+                                        <h4 className="text-xl font-bold mb-3 text-gray-800">透明化</h4>
+                                        <p className="text-gray-600">
+                                            生徒会の活動をすべて可視化。タスク管理システムで誰もが進捗を確認できます。
+                                        </p>
+                                    </div>
+                                    <div className="p-6 border-2 border-purple-200 rounded-lg hover:shadow-lg transition-shadow">
+                                        <div className="text-4xl mb-4">📮</div>
+                                        <h4 className="text-xl font-bold mb-3 text-gray-800">デジタル目安箱</h4>
+                                        <p className="text-gray-600">
+                                            匿名で意見を送れる目安箱。生徒の声を確実に届け、回答状況も公開します。
+                                        </p>
+                                    </div>
+                                    <div className="p-6 border-2 border-pink-200 rounded-lg hover:shadow-lg transition-shadow">
+                                        <div className="text-4xl mb-4">🌏</div>
+                                        <h4 className="text-xl font-bold mb-3 text-gray-800">全国展開</h4>
+                                        <p className="text-gray-600">
+                                            致道館のモデルを全国の高校に展開。日本中の生徒会を変革します。
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section className="py-16 bg-gray-50">
+                            <div className="max-w-4xl mx-auto px-4 text-center">
+                                <h3 className="text-3xl font-bold mb-6 text-gray-800">
+                                    あなたも参加しませんか？
+                                </h3>
+                                <p className="text-xl text-gray-600 mb-8">
+                                    私たちと一緒に、学校を、そして日本の教育を変えていきましょう
+                                </p>
+                                <div className="flex gap-4 justify-center flex-wrap">
+                                    <button
+                                        onClick={() => setCurrentPage('suggestion-box')}
+                                        className="bg-indigo-600 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-indigo-700 transition-colors shadow-lg"
+                                    >
+                                        意見を送る →
+                                    </button>
+                                    <button
+                                        onClick={() => setCurrentPage('dashboard')}
+                                        className="bg-white text-indigo-600 border-2 border-indigo-600 px-8 py-3 rounded-lg font-bold text-lg hover:bg-indigo-50 transition-colors shadow-lg"
+                                    >
+                                        活動を見る →
+                                    </button>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                );
+            };
 
             // ビジョンページ
             const VisionPage = () => (
@@ -650,6 +780,148 @@
                 </div>
             );
 
+            // 連絡掲示板ページ
+            const AnnouncementsPage = () => {
+                const filteredAnnouncements = announcementCategoryFilter === 'all'
+                    ? announcements
+                    : announcements.filter(a => a.category === announcementCategoryFilter);
+
+                return (
+                    <div className="fade-in max-w-7xl mx-auto px-4 py-8">
+                        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                                <div>
+                                    <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
+                                        <BellIcon className="w-8 h-8 text-indigo-600" />
+                                        連絡掲示板
+                                    </h2>
+                                    <p className="text-sm text-gray-600 mt-1">
+                                        生徒会からの重要なお知らせ・イベント情報
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={loadAnnouncements}
+                                    disabled={loading}
+                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                                >
+                                    <RefreshIcon className="w-4 h-4" spin={loading} />
+                                    <span>更新</span>
+                                </button>
+                            </div>
+
+                            {lastUpdated && (
+                                <div className="flex items-center gap-2 text-sm text-gray-600 mb-6">
+                                    <ClockIcon className="w-4 h-4" />
+                                    <span>最終更新: {lastUpdated}</span>
+                                </div>
+                            )}
+
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    カテゴリで絞り込み
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {['すべて', '緊急', '総会', 'イベント', 'お知らせ'].map(cat => (
+                                        <button
+                                            key={cat}
+                                            onClick={() => setAnnouncementCategoryFilter(cat === 'すべて' ? 'all' : cat)}
+                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                                (cat === 'すべて' && announcementCategoryFilter === 'all') ||
+                                                announcementCategoryFilter === cat
+                                                    ? 'bg-indigo-600 text-white'
+                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            {cat}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="text-sm text-gray-600">
+                                {filteredAnnouncements.length}件の連絡を表示中
+                            </div>
+                        </div>
+
+                        {loading ? (
+                            <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                                <RefreshIcon className="w-8 h-8 mx-auto mb-4 text-indigo-600" spin={true} />
+                                <p className="text-gray-600">読み込み中...</p>
+                            </div>
+                        ) : error ? (
+                            <div className="bg-white rounded-lg shadow-lg p-8">
+                                <div className="flex items-center gap-3 text-red-600 mb-4">
+                                    <AlertIcon className="w-6 h-6" />
+                                    <p className="font-medium">エラーが発生しました</p>
+                                </div>
+                                <p className="text-gray-600">{error}</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {filteredAnnouncements.length === 0 ? (
+                                    <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                                        <BellIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                                        <p className="text-gray-600">
+                                            {announcementCategoryFilter === 'all'
+                                                ? 'まだ連絡がありません'
+                                                : `「${announcementCategoryFilter}」の連絡はありません`}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    filteredAnnouncements.map((announcement) => (
+                                        <div
+                                            key={announcement.id}
+                                            className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border-l-4 ${
+                                                announcement.category === '緊急'
+                                                    ? 'border-red-500'
+                                                    : 'border-indigo-500'
+                                            }`}
+                                        >
+                                            <div className="flex items-start gap-4 mb-4">
+                                                <div className="text-4xl">{getCategoryIcon(announcement.category)}</div>
+                                                <div className="flex-grow">
+                                                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                                        <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getCategoryColor(announcement.category)}`}>
+                                                            {announcement.category}
+                                                        </span>
+                                                        <div className="flex items-center gap-1 text-sm text-gray-500">
+                                                            <ClockIcon className="w-4 h-4" />
+                                                            <span>{announcement.date} ({getRelativeTime(announcement.date)})</span>
+                                                        </div>
+                                                    </div>
+                                                    <h3 className="text-xl font-bold text-gray-800 mb-3">
+                                                        {announcement.title}
+                                                    </h3>
+                                                    <p className="text-gray-700 leading-relaxed whitespace-pre-wrap mb-4">
+                                                        {announcement.content}
+                                                    </p>
+                                                    {isValidUrl(announcement.link) && (
+                                                        <a
+                                                            href={announcement.link}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-medium"
+                                                        >
+                                                            <span>詳細を見る</span>
+                                                            <ExternalLinkIcon className="w-4 h-4" />
+                                                        </a>
+                                                    )}
+                                                    {announcement.expires && (
+                                                        <div className="mt-3 text-xs text-gray-500">
+                                                            表示期限: {announcement.expires}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
             // デジタル目安箱ページ
             const SuggestionBoxPage = () => {
                 const filteredSuggestions = suggestionStatusFilter === 'all' 
@@ -835,6 +1107,7 @@
                         {currentPage === 'home' && <HomePage />}
                         {currentPage === 'vision' && <VisionPage />}
                         {currentPage === 'dashboard' && <DashboardPage />}
+                        {currentPage === 'announcements' && <AnnouncementsPage />}
                         {currentPage === 'suggestion-box' && <SuggestionBoxPage />}
                     </main>
                 </div>
