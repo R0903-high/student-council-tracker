@@ -23,6 +23,13 @@
         .fade-in {
             animation: fadeIn 0.6s ease-out;
         }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
     </style>
 </head>
 <body>
@@ -79,6 +86,19 @@
             </svg>
         );
 
+        // 未読バッジコンポーネント
+        const UnreadBadge = ({ count }) => {
+            if (count === 0) return null;
+            
+            const displayCount = count > 99 ? '99+' : count;
+            
+            return (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 animate-pulse">
+                    {displayCount}
+                </span>
+            );
+        };
+
         const StudentCouncilSite = () => {
             const [currentPage, setCurrentPage] = useState('home');
             const [tasks, setTasks] = useState([]);
@@ -93,6 +113,12 @@
             const [suggestionStatusFilter, setSuggestionStatusFilter] = useState('all');
             const [announcementCategoryFilter, setAnnouncementCategoryFilter] = useState('all');
             const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+            
+            // 未読管理用のstate
+            const [lastViewedAnnouncements, setLastViewedAnnouncements] = useState({});
+            const [lastViewedSuggestions, setLastViewedSuggestions] = useState({});
+            const [unreadAnnouncementsCount, setUnreadAnnouncementsCount] = useState(0);
+            const [unreadSuggestionsCount, setUnreadSuggestionsCount] = useState(0);
  
             // API URLs
             const TASKS_API_URL = 'https://script.google.com/macros/s/AKfycby2vNpYa55_u_u-OR8mP9oDRbZIjGVtSzWhTJ3zlwA-F4G3UpKGU6uKvPBv8pNBRZZa/exec';
@@ -102,23 +128,107 @@
 
             const navigation = [
                 { id: 'home', label: 'ホーム', icon: '🏠' },
-                { id: 'vision', label: 'ビジョン', icon: '🎯' },
                 { id: 'dashboard', label: 'タスク管理', icon: '📊' },
-                { id: 'announcements', label: '連絡掲示板', icon: '📢' },
-                { id: 'suggestion-box', label: 'デジタル目安箱', icon: '📮' },
+                { id: 'announcements', label: '連絡掲示板', icon: '📢', unreadKey: 'announcements' },
+                { id: 'suggestion-box', label: 'デジタル目安箱', icon: '📮', unreadKey: 'suggestions' },
             ];
 
+            // ローカルストレージから未読情報を読み込み
+            useEffect(() => {
+                const savedAnnouncementsView = localStorage.getItem('lastViewedAnnouncements');
+                const savedSuggestionsView = localStorage.getItem('lastViewedSuggestions');
+                
+                if (savedAnnouncementsView) {
+                    setLastViewedAnnouncements(JSON.parse(savedAnnouncementsView));
+                }
+                if (savedSuggestionsView) {
+                    setLastViewedSuggestions(JSON.parse(savedSuggestionsView));
+                }
+            }, []);
+
+            // データ取得時に未読カウントを計算
+            useEffect(() => {
+                calculateUnreadCounts();
+            }, [announcements, suggestions, lastViewedAnnouncements, lastViewedSuggestions]);
+
+            // ページ変更時のデータ読み込み
             useEffect(() => {
                 if (currentPage === 'dashboard') {
                     loadTasks();
                 } else if (currentPage === 'suggestion-box') {
                     loadSuggestions();
+                    markSuggestionsAsViewed();
                 } else if (currentPage === 'announcements') {
                     loadAnnouncements();
+                    markAnnouncementsAsViewed();
                 } else if (currentPage === 'home') {
-                    loadAnnouncements(); // ホームページでも最新連絡を表示
+                    loadAnnouncements();
+                    loadSuggestions();
                 }
             }, [currentPage]);
+
+            // 定期的にデータを更新（30秒ごと）
+            useEffect(() => {
+                const interval = setInterval(() => {
+                    if (currentPage === 'dashboard') {
+                        loadTasks();
+                    } else if (currentPage === 'suggestion-box') {
+                        loadSuggestions();
+                    } else if (currentPage === 'announcements') {
+                        loadAnnouncements();
+                    } else if (currentPage === 'home') {
+                        loadAnnouncements();
+                        loadSuggestions();
+                    }
+                }, 30000);
+
+                return () => clearInterval(interval);
+            }, [currentPage]);
+
+            const calculateUnreadCounts = () => {
+                // 連絡掲示板の未読計算
+                const newAnnouncements = announcements.filter(announcement => {
+                    const lastViewed = lastViewedAnnouncements[announcement.id];
+                    if (!lastViewed) return true;
+                    
+                    const announcementDate = new Date(announcement.date).getTime();
+                    const lastViewedDate = new Date(lastViewed).getTime();
+                    
+                    return announcementDate > lastViewedDate;
+                });
+                setUnreadAnnouncementsCount(newAnnouncements.length);
+
+                // デジタル目安箱の未読計算（statusが変更されたもの）
+                const updatedSuggestions = suggestions.filter(suggestion => {
+                    const lastViewedData = lastViewedSuggestions[suggestion.id];
+                    if (!lastViewedData) return suggestion.status !== '未確認';
+                    
+                    return suggestion.status !== lastViewedData.status || 
+                           suggestion.response !== lastViewedData.response;
+                });
+                setUnreadSuggestionsCount(updatedSuggestions.length);
+            };
+
+            const markAnnouncementsAsViewed = () => {
+                const viewData = {};
+                announcements.forEach(announcement => {
+                    viewData[announcement.id] = announcement.date;
+                });
+                setLastViewedAnnouncements(viewData);
+                localStorage.setItem('lastViewedAnnouncements', JSON.stringify(viewData));
+            };
+
+            const markSuggestionsAsViewed = () => {
+                const viewData = {};
+                suggestions.forEach(suggestion => {
+                    viewData[suggestion.id] = {
+                        status: suggestion.status,
+                        response: suggestion.response
+                    };
+                });
+                setLastViewedSuggestions(viewData);
+                localStorage.setItem('lastViewedSuggestions', JSON.stringify(viewData));
+            };
 
             const loadTasks = async () => {
                 setLoading(true);
@@ -289,6 +399,12 @@
                 }
             };
 
+            const getUnreadCount = (navId) => {
+                if (navId === 'announcements') return unreadAnnouncementsCount;
+                if (navId === 'suggestion-box') return unreadSuggestionsCount;
+                return 0;
+            };
+
             const displayedTasks = getFilteredAndSortedTasks();
             const categories = ['all', ...new Set(tasks.map(t => t.category).filter(Boolean))];
             const statuses = ['未着手', '検討中', '審議中', '進行中', '保留', '可決', '否決', '完了'];
@@ -309,7 +425,7 @@
                                     <button
                                         key={item.id}
                                         onClick={() => setCurrentPage(item.id)}
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                        className={`relative flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                                             currentPage === item.id
                                                 ? 'bg-indigo-100 text-indigo-700'
                                                 : 'text-gray-700 hover:bg-gray-100'
@@ -317,6 +433,9 @@
                                     >
                                         <span>{item.icon}</span>
                                         <span>{item.label}</span>
+                                        {item.unreadKey && (
+                                            <UnreadBadge count={getUnreadCount(item.id)} />
+                                        )}
                                     </button>
                                 ))}
                             </nav>
@@ -338,7 +457,7 @@
                                             setCurrentPage(item.id);
                                             setMobileMenuOpen(false);
                                         }}
-                                        className={`flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                        className={`relative flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                                             currentPage === item.id
                                                 ? 'bg-indigo-100 text-indigo-700'
                                                 : 'text-gray-700 hover:bg-gray-100'
@@ -346,6 +465,9 @@
                                     >
                                         <span>{item.icon}</span>
                                         <span>{item.label}</span>
+                                        {item.unreadKey && (
+                                            <UnreadBadge count={getUnreadCount(item.id)} />
+                                        )}
                                     </button>
                                 ))}
                             </div>
@@ -369,12 +491,6 @@
                                     致道館の自学自習の伝統を継承し、<br className="sm:hidden" />
                                     民主的な学校運営を実現する
                                 </p>
-                                <button
-                                    onClick={() => setCurrentPage('vision')}
-                                    className="bg-white text-indigo-600 px-8 py-3 rounded-lg font-bold text-lg hover:bg-gray-100 transition-colors shadow-lg"
-                                >
-                                    ビジョンを見る →
-                                </button>
                             </div>
                         </section>
 
@@ -386,6 +502,11 @@
                                         <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                                             <BellIcon className="w-6 h-6 text-indigo-600" />
                                             最新連絡
+                                            {unreadAnnouncementsCount > 0 && (
+                                                <span className="bg-red-500 text-white text-sm font-bold rounded-full px-3 py-1 animate-pulse">
+                                                    {unreadAnnouncementsCount}件の新着
+                                                </span>
+                                            )}
                                         </h3>
                                         <button
                                             onClick={() => setCurrentPage('announcements')}
@@ -488,105 +609,6 @@
                     </div>
                 );
             };
-
-            // ビジョンページ
-            const VisionPage = () => (
-                <div className="fade-in max-w-4xl mx-auto px-4 py-12">
-                    <h2 className="text-4xl font-bold mb-8 text-gray-800">私たちのビジョン</h2>
-                    
-                    <section className="mb-12 p-8 bg-indigo-50 rounded-lg border-l-4 border-indigo-600">
-                        <h3 className="text-2xl font-bold mb-4 text-indigo-900">
-                            日本の教育を生徒会から変える
-                        </h3>
-                        <p className="text-lg text-gray-700 leading-relaxed">
-                            私たちは、形骸化した生徒会を民主的で透明性の高い組織に変革します。
-                            致道館の自学自習の伝統を受け継ぎ、生徒一人ひとりが主体的に学校運営に参加できる環境を作ります。
-                            そして、このモデルを全国に展開し、日本中の高校生が自分たちの手で学校を変えられる未来を実現します。
-                        </p>
-                    </section>
-
-                    <section className="mb-12">
-                        <h3 className="text-2xl font-bold mb-6 text-gray-800">なぜ今、生徒会改革が必要か</h3>
-                        <div className="space-y-4 text-gray-700">
-                            <p className="text-lg leading-relaxed">
-                                多くの高校で、生徒会は「お飾り」になっています。形式的な活動だけで、
-                                本当に生徒の声を反映した変革は起きていません。
-                            </p>
-                            <p className="text-lg leading-relaxed">
-                                しかし、致道館には自学自習という素晴らしい伝統があります。
-                                生徒が自ら考え、行動する文化。この伝統を生徒会にも活かせば、
-                                本当の意味での民主的な学校運営が実現できるはずです。
-                            </p>
-                        </div>
-                    </section>
-
-                    <section className="mb-12">
-                        <h3 className="text-2xl font-bold mb-6 text-gray-800">3年間のロードマップ</h3>
-                        <div className="space-y-6">
-                            <div className="border-l-4 border-blue-500 pl-6 py-4">
-                                <h4 className="text-xl font-bold mb-2 text-blue-900">2024-2025年：基盤づくり</h4>
-                                <ul className="list-disc list-inside text-gray-700 space-y-2">
-                                    <li>タスク管理システムの構築と運用開始</li>
-                                    <li>デジタル目安箱の立ち上げ</li>
-                                    <li>生徒会活動の完全透明化</li>
-                                </ul>
-                            </div>
-                            <div className="border-l-4 border-purple-500 pl-6 py-4">
-                                <h4 className="text-xl font-bold mb-2 text-purple-900">2025-2026年：校内展開</h4>
-                                <ul className="list-disc list-inside text-gray-700 space-y-2">
-                                    <li>全校生徒が参加できる仕組みの確立</li>
-                                    <li>校内VCプログラムの立ち上げ</li>
-                                    <li>他校との連携開始</li>
-                                </ul>
-                            </div>
-                            <div className="border-l-4 border-pink-500 pl-6 py-4">
-                                <h4 className="text-xl font-bold mb-2 text-pink-900">2026-2027年：全国展開</h4>
-                                <ul className="list-disc list-inside text-gray-700 space-y-2">
-                                    <li>モデルの体系化とマニュアル作成</li>
-                                    <li>全国の高校への展開開始</li>
-                                    <li>生徒会改革ネットワークの構築</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section className="mb-12 p-8 bg-yellow-50 rounded-lg">
-                        <h3 className="text-2xl font-bold mb-4 text-gray-800">致道館の伝統を受け継ぐ</h3>
-                        <p className="text-lg text-gray-700 leading-relaxed mb-4">
-                            致道館は、江戸時代から続く自学自習の伝統を持つ学校です。
-                            「自ら学び、自ら考える」という精神は、まさに私たちが目指す
-                            主体的な生徒会運営の根幹となる考え方です。
-                        </p>
-                        <p className="text-lg text-gray-700 leading-relaxed">
-                            この歴史ある伝統を現代に活かし、新しい形の民主的な学校運営を実現する。
-                            それが私たちの使命です。
-                        </p>
-                    </section>
-
-                    <section className="text-center p-8 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg text-white">
-                        <h3 className="text-2xl font-bold mb-4">
-                            一緒に未来を創りませんか？
-                        </h3>
-                        <p className="text-lg mb-6 opacity-90">
-                            あなたのアイデアと行動が、学校を、日本を変えます
-                        </p>
-                        <div className="flex gap-4 justify-center flex-wrap">
-                            <button
-                                onClick={() => setCurrentPage('suggestion-box')}
-                                className="bg-white text-indigo-600 px-8 py-3 rounded-lg font-bold hover:bg-gray-100 transition-colors"
-                            >
-                                意見を送る →
-                            </button>
-                            <button
-                                onClick={() => setCurrentPage('dashboard')}
-                                className="bg-indigo-500 text-white px-8 py-3 rounded-lg font-bold hover:bg-indigo-400 transition-colors"
-                            >
-                                活動状況を見る →
-                            </button>
-                        </div>
-                    </section>
-                </div>
-            );
 
             // タスク管理ページ
             const DashboardPage = () => (
@@ -1105,7 +1127,6 @@
                     <Header />
                     <main>
                         {currentPage === 'home' && <HomePage />}
-                        {currentPage === 'vision' && <VisionPage />}
                         {currentPage === 'dashboard' && <DashboardPage />}
                         {currentPage === 'announcements' && <AnnouncementsPage />}
                         {currentPage === 'suggestion-box' && <SuggestionBoxPage />}
