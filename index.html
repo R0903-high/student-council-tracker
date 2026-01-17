@@ -694,11 +694,11 @@
                                                     </div>
                                                 )}
                                                 <h3 className="font-bold text-gray-800 text-lg mb-2">
-                                                    {task.name}
+                                                    {task.name || task.title || '（タスク名なし）'}
                                                 </h3>
-                                                {task.detail && (
+                                                {(task.detail || task.description) && (
                                                     <p className="text-sm text-gray-600 mb-3 leading-relaxed">
-                                                        {task.detail}
+                                                        {task.detail || task.description}
                                                     </p>
                                                 )}
                                                 <div className="flex flex-wrap items-center gap-3">
