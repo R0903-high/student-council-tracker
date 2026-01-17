@@ -117,8 +117,8 @@
             const [unreadSuggestionsCount, setUnreadSuggestionsCount] = useState(0);
  
             // API URLs
-            const TASKS_API_URL = 'https://script.google.com/macros/s/AKfycbxTfES8lpILEgjPN6xYWwtCiK8ILgasfDp65djK20ZWqUIZtcWsHtMeTSv9hk5Nu0qhzQ/exec';
-            const SUGGESTIONS_API_URL = 'https://script.google.com/macros/s/AKfycbw9GVeYuWo5ree_-cRL7uu3dv6rFqnNQP2kYUwDeUIta1q5xBhQ1vAXqkthQ_9lXj2d/exec';
+            const TASKS_API_URL = 'https://script.google.com/macros/s/AKfycby2vNpYa55_u_u-OR8mP9oDRbZIjGVtSzWhTJ3zlwA-F4G3UpKGU6uKvPBv8pNBRZZa/exec';
+            const SUGGESTIONS_API_URL = 'https://script.google.com/macros/s/AKfycbxTfES8lpILEgjPN6xYWwtCiK8ILgasfDp65djK20ZWqUIZtcWsHtMeTSv9hk5Nu0qhzQ/exec';
             const ANNOUNCEMENTS_API_URL = 'https://script.google.com/macros/s/AKfycbxtTSAUgLc8SsrsS_Fzg7wurIwsCaYYBdzLNSBiw98yqSOsh7ek9dj9yPIOdX1eNaCK/exec';
             const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSf6DovixYdqNS944GmwpjlI-eRsabNXIoAzZGUZt5A7tQZyQA/viewform?usp=dialog';
 
@@ -220,6 +220,22 @@
                     if (!response.ok) throw new Error('データの取得に失敗しました');
                     const data = await response.json();
                     console.log('Tasks data:', data);
+                    
+                    // データ構造の検証
+                    if (data.length > 0) {
+                        const firstItem = data[0];
+                        console.log('First item keys:', Object.keys(firstItem));
+                        
+                        // デジタル目安箱のデータが返ってきた場合のエラー表示
+                        if (firstItem.hasOwnProperty('timestamp') && firstItem.hasOwnProperty('email')) {
+                            console.error('⚠️ タスク管理APIがデジタル目安箱のデータを返しています');
+                            setError('タスク管理APIの設定に問題があります。Google Apps Scriptのデプロイメントを確認してください。');
+                            setTasks([]);
+                            setLoading(false);
+                            return;
+                        }
+                    }
+                    
                     setTasks(Array.isArray(data) ? data : []);
                     setLastUpdated(new Date().toLocaleString('ja-JP'));
                     setError(null);
