@@ -215,6 +215,7 @@
                 setLoading(true);
                 setError(null);
                 try {
+                    console.log('Loading tasks from:', TASKS_API_URL);
                     const response = await fetch(TASKS_API_URL);
                     if (!response.ok) throw new Error('データの取得に失敗しました');
                     const data = await response.json();
