@@ -218,6 +218,7 @@
                     const response = await fetch(TASKS_API_URL);
                     if (!response.ok) throw new Error('データの取得に失敗しました');
                     const data = await response.json();
+                    console.log('Tasks data:', data);
                     setTasks(Array.isArray(data) ? data : []);
                     setLastUpdated(new Date().toLocaleString('ja-JP'));
                     setError(null);
@@ -237,6 +238,7 @@
                     const response = await fetch(SUGGESTIONS_API_URL);
                     if (!response.ok) throw new Error('データの取得に失敗しました');
                     const data = await response.json();
+                    console.log('Suggestions data:', data);
                     setSuggestions(Array.isArray(data) ? data : []);
                     setLastUpdated(new Date().toLocaleString('ja-JP'));
                     setError(null);
@@ -256,6 +258,7 @@
                     const response = await fetch(ANNOUNCEMENTS_API_URL);
                     if (!response.ok) throw new Error('データの取得に失敗しました');
                     const data = await response.json();
+                    console.log('Announcements data:', data);
                     setAnnouncements(Array.isArray(data) ? data : []);
                     setLastUpdated(new Date().toLocaleString('ja-JP'));
                     setError(null);
