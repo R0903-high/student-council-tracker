@@ -89,9 +89,7 @@
         // 未読バッジコンポーネント
         const UnreadBadge = ({ count }) => {
             if (count === 0) return null;
-            
             const displayCount = count > 99 ? '99+' : count;
-            
             return (
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 animate-pulse">
                     {displayCount}
@@ -113,8 +111,6 @@
             const [suggestionStatusFilter, setSuggestionStatusFilter] = useState('all');
             const [announcementCategoryFilter, setAnnouncementCategoryFilter] = useState('all');
             const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-            
-            // 未読管理用のstate
             const [lastViewedAnnouncements, setLastViewedAnnouncements] = useState({});
             const [lastViewedSuggestions, setLastViewedSuggestions] = useState({});
             const [unreadAnnouncementsCount, setUnreadAnnouncementsCount] = useState(0);
@@ -123,7 +119,7 @@
             // API URLs
             const TASKS_API_URL = 'https://script.google.com/macros/s/AKfycbxTfES8lpILEgjPN6xYWwtCiK8ILgasfDp65djK20ZWqUIZtcWsHtMeTSv9hk5Nu0qhzQ/exec';
             const SUGGESTIONS_API_URL = 'https://script.google.com/macros/s/AKfycbw9GVeYuWo5ree_-cRL7uu3dv6rFqnNQP2kYUwDeUIta1q5xBhQ1vAXqkthQ_9lXj2d/exec';
-            const ANNOUNCEMENTS_API_URL ='https://script.google.com/macros/s/AKfycbxtTSAUgLc8SsrsS_Fzg7wurIwsCaYYBdzLNSBiw98yqSOsh7ek9dj9yPIOdX1eNaCK/exec';
+            const ANNOUNCEMENTS_API_URL = 'https://script.google.com/macros/s/AKfycbxtTSAUgLc8SsrsS_Fzg7wurIwsCaYYBdzLNSBiw98yqSOsh7ek9dj9yPIOdX1eNaCK/exec';
             const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSf6DovixYdqNS944GmwpjlI-eRsabNXIoAzZGUZt5A7tQZyQA/viewform?usp=dialog';
 
             const navigation = [
@@ -133,25 +129,17 @@
                 { id: 'suggestion-box', label: 'デジタル目安箱', icon: '📮', unreadKey: 'suggestions' },
             ];
 
-            // ローカルストレージから未読情報を読み込み
             useEffect(() => {
-                const savedAnnouncementsView = localStorage.getItem('lastViewedAnnouncements');
-                const savedSuggestionsView = localStorage.getItem('lastViewedSuggestions');
-                
-                if (savedAnnouncementsView) {
-                    setLastViewedAnnouncements(JSON.parse(savedAnnouncementsView));
-                }
-                if (savedSuggestionsView) {
-                    setLastViewedSuggestions(JSON.parse(savedSuggestionsView));
-                }
+                const savedAnnouncementsView = JSON.parse(localStorage.getItem('lastViewedAnnouncements') || '{}');
+                const savedSuggestionsView = JSON.parse(localStorage.getItem('lastViewedSuggestions') || '{}');
+                setLastViewedAnnouncements(savedAnnouncementsView);
+                setLastViewedSuggestions(savedSuggestionsView);
             }, []);
 
-            // データ取得時に未読カウントを計算
             useEffect(() => {
                 calculateUnreadCounts();
             }, [announcements, suggestions, lastViewedAnnouncements, lastViewedSuggestions]);
 
-            // ページ変更時のデータ読み込み
             useEffect(() => {
                 if (currentPage === 'dashboard') {
                     loadTasks();
@@ -167,7 +155,6 @@
                 }
             }, [currentPage]);
 
-            // 定期的にデータを更新（30秒ごと）
             useEffect(() => {
                 const interval = setInterval(() => {
                     if (currentPage === 'dashboard') {
@@ -181,28 +168,22 @@
                         loadSuggestions();
                     }
                 }, 30000);
-
                 return () => clearInterval(interval);
             }, [currentPage]);
 
             const calculateUnreadCounts = () => {
-                // 連絡掲示板の未読計算
                 const newAnnouncements = announcements.filter(announcement => {
                     const lastViewed = lastViewedAnnouncements[announcement.id];
                     if (!lastViewed) return true;
-                    
                     const announcementDate = new Date(announcement.date).getTime();
                     const lastViewedDate = new Date(lastViewed).getTime();
-                    
                     return announcementDate > lastViewedDate;
                 });
                 setUnreadAnnouncementsCount(newAnnouncements.length);
 
-                // デジタル目安箱の未読計算（statusが変更されたもの）
                 const updatedSuggestions = suggestions.filter(suggestion => {
                     const lastViewedData = lastViewedSuggestions[suggestion.id];
                     if (!lastViewedData) return suggestion.status !== '未確認';
-                    
                     return suggestion.status !== lastViewedData.status || 
                            suggestion.response !== lastViewedData.response;
                 });
@@ -233,14 +214,9 @@
             const loadTasks = async () => {
                 setLoading(true);
                 setError(null);
-                
                 try {
                     const response = await fetch(TASKS_API_URL);
-                    
-                    if (!response.ok) {
-                        throw new Error('データの取得に失敗しました');
-                    }
-                    
+                    if (!response.ok) throw new Error('データの取得に失敗しました');
                     const data = await response.json();
                     setTasks(Array.isArray(data) ? data : []);
                     setLastUpdated(new Date().toLocaleString('ja-JP'));
@@ -257,14 +233,9 @@
             const loadSuggestions = async () => {
                 setLoading(true);
                 setError(null);
-                
                 try {
                     const response = await fetch(SUGGESTIONS_API_URL);
-                    
-                    if (!response.ok) {
-                        throw new Error('データの取得に失敗しました');
-                    }
-                    
+                    if (!response.ok) throw new Error('データの取得に失敗しました');
                     const data = await response.json();
                     setSuggestions(Array.isArray(data) ? data : []);
                     setLastUpdated(new Date().toLocaleString('ja-JP'));
@@ -281,14 +252,9 @@
             const loadAnnouncements = async () => {
                 setLoading(true);
                 setError(null);
-                
                 try {
                     const response = await fetch(ANNOUNCEMENTS_API_URL);
-                    
-                    if (!response.ok) {
-                        throw new Error('データの取得に失敗しました');
-                    }
-                    
+                    if (!response.ok) throw new Error('データの取得に失敗しました');
                     const data = await response.json();
                     setAnnouncements(Array.isArray(data) ? data : []);
                     setLastUpdated(new Date().toLocaleString('ja-JP'));
@@ -343,12 +309,10 @@
 
             const getRelativeTime = (dateString) => {
                 if (!dateString) return '';
-                
                 const date = new Date(dateString);
                 const now = new Date();
                 const diffTime = now - date;
                 const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                
                 if (diffDays === 0) return '今日';
                 if (diffDays === 1) return '昨日';
                 if (diffDays < 7) return `${diffDays}日前`;
@@ -367,21 +331,17 @@
 
             const getFilteredAndSortedTasks = () => {
                 let filtered = [...tasks];
-                
                 if (selectedCategory !== 'all') {
                     filtered = filtered.filter(task => task.category === selectedCategory);
                 }
-                
                 if (selectedStatuses.length > 0) {
                     filtered = filtered.filter(task => selectedStatuses.includes(task.status));
                 }
-                
                 const sorted = filtered.sort((a, b) => {
                     const dateA = new Date(a.updated || 0);
                     const dateB = new Date(b.updated || 0);
                     return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
                 });
-                
                 return sorted;
             };
 
@@ -409,7 +369,6 @@
             const categories = ['all', ...new Set(tasks.map(t => t.category).filter(Boolean))];
             const statuses = ['未着手', '検討中', '審議中', '進行中', '保留', '可決', '否決', '完了'];
 
-            // ヘッダーコンポーネント
             const Header = () => (
                 <header className="bg-white shadow-md sticky top-0 z-50">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -419,7 +378,6 @@
                                     致道館高校生徒会
                                 </h1>
                             </div>
-                            
                             <nav className="hidden md:flex space-x-4">
                                 {navigation.map(item => (
                                     <button
@@ -439,7 +397,6 @@
                                     </button>
                                 ))}
                             </nav>
-
                             <button
                                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                                 className="md:hidden p-2 rounded-md text-gray-700 hover:bg-gray-100"
@@ -447,7 +404,6 @@
                                 {mobileMenuOpen ? <CloseIcon className="w-6 h-6" /> : <MenuIcon className="w-6 h-6" />}
                             </button>
                         </div>
-
                         {mobileMenuOpen && (
                             <div className="md:hidden py-4 border-t border-gray-200">
                                 {navigation.map(item => (
@@ -476,10 +432,8 @@
                 </header>
             );
 
-            // ホームページ
             const HomePage = () => {
                 const latestAnnouncements = announcements.slice(0, 5);
-                
                 return (
                     <div className="fade-in">
                         <section className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-20">
@@ -493,8 +447,6 @@
                                 </p>
                             </div>
                         </section>
-
-                        {/* 最新連絡セクション */}
                         {latestAnnouncements.length > 0 && (
                             <section className="py-12 bg-gray-50">
                                 <div className="max-w-6xl mx-auto px-4">
@@ -550,7 +502,6 @@
                                 </div>
                             </section>
                         )}
-
                         <section className="py-16 bg-white">
                             <div className="max-w-6xl mx-auto px-4">
                                 <h3 className="text-3xl font-bold text-center mb-12 text-gray-800">
@@ -574,7 +525,6 @@
                                 </div>
                             </div>
                         </section>
-
                         <section className="py-16 bg-gray-50">
                             <div className="max-w-4xl mx-auto px-4 text-center">
                                 <h3 className="text-3xl font-bold mb-6 text-gray-800">
@@ -603,7 +553,6 @@
                 );
             };
 
-            // タスク管理ページ
             const DashboardPage = () => (
                 <div className="fade-in max-w-7xl mx-auto px-4 py-8">
                     <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
@@ -625,14 +574,12 @@
                                 <span>更新</span>
                             </button>
                         </div>
-                        
                         {lastUpdated && (
                             <div className="flex items-center gap-2 text-sm text-gray-600 mb-6">
                                 <ClockIcon className="w-4 h-4" />
                                 <span>最終更新: {lastUpdated}</span>
                             </div>
                         )}
-
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -654,7 +601,6 @@
                                     ))}
                                 </div>
                             </div>
-
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     ステータスで絞り込み（複数選択可）
@@ -680,7 +626,6 @@
                                     ))}
                                 </div>
                             </div>
-
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     並び順
@@ -694,13 +639,11 @@
                                     <option value="asc">古い順</option>
                                 </select>
                             </div>
-
                             <div className="text-sm text-gray-600">
                                 {displayedTasks.length}件のタスクを表示中
                             </div>
                         </div>
                     </div>
-
                     {loading ? (
                         <div className="bg-white rounded-lg shadow-lg p-8 text-center">
                             <RefreshIcon className="w-8 h-8 mx-auto mb-4 text-indigo-600" spin={true} />
@@ -739,7 +682,6 @@
                                                     </div>
                                                 </div>
                                             </div>
-
                                             <div className="flex-grow p-4">
                                                 {task.category && (
                                                     <div className="mb-2">
@@ -748,22 +690,18 @@
                                                         </span>
                                                     </div>
                                                 )}
-                                                
                                                 <h3 className="font-bold text-gray-800 text-lg mb-2">
                                                     {task.name}
                                                 </h3>
-                                                
                                                 {task.detail && (
                                                     <p className="text-sm text-gray-600 mb-3 leading-relaxed">
                                                         {task.detail}
                                                     </p>
                                                 )}
-                                                
                                                 <div className="flex flex-wrap items-center gap-3">
                                                     <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getStatusColor(task.status)}`}>
                                                         {task.status}
                                                     </span>
-                                                    
                                                     {task.updated && (
                                                         <div className="flex items-center gap-1 text-xs text-gray-500">
                                                             <ClockIcon className="w-3 h-3" />
@@ -772,7 +710,6 @@
                                                     )}
                                                 </div>
                                             </div>
-
                                             {isValidUrl(task.url) && (
                                                 <div className="p-4 flex items-center justify-center border-t sm:border-t-0 sm:border-l border-gray-100">
                                                     <a
@@ -795,12 +732,10 @@
                 </div>
             );
 
-            // 連絡掲示板ページ
             const AnnouncementsPage = () => {
                 const filteredAnnouncements = announcementCategoryFilter === 'all'
                     ? announcements
                     : announcements.filter(a => a.category === announcementCategoryFilter);
-
                 return (
                     <div className="fade-in max-w-7xl mx-auto px-4 py-8">
                         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
@@ -823,14 +758,12 @@
                                     <span>更新</span>
                                 </button>
                             </div>
-
                             {lastUpdated && (
                                 <div className="flex items-center gap-2 text-sm text-gray-600 mb-6">
                                     <ClockIcon className="w-4 h-4" />
                                     <span>最終更新: {lastUpdated}</span>
                                 </div>
                             )}
-
                             <div className="mb-4">
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     カテゴリで絞り込み
@@ -852,12 +785,10 @@
                                     ))}
                                 </div>
                             </div>
-
                             <div className="text-sm text-gray-600">
                                 {filteredAnnouncements.length}件の連絡を表示中
                             </div>
                         </div>
-
                         {loading ? (
                             <div className="bg-white rounded-lg shadow-lg p-8 text-center">
                                 <RefreshIcon className="w-8 h-8 mx-auto mb-4 text-indigo-600" spin={true} />
@@ -937,12 +868,10 @@
                 );
             };
 
-            // デジタル目安箱ページ
             const SuggestionBoxPage = () => {
                 const filteredSuggestions = suggestionStatusFilter === 'all' 
                     ? suggestions 
                     : suggestions.filter(s => s.status === suggestionStatusFilter);
-
                 return (
                     <div className="fade-in max-w-7xl mx-auto px-4 py-8">
                         <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg shadow-lg p-8 mb-8 text-white">
@@ -967,7 +896,6 @@
                                 </a>
                             </div>
                         </div>
-
                         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                                 <div>
@@ -987,14 +915,12 @@
                                     <span>更新</span>
                                 </button>
                             </div>
-                            
                             {lastUpdated && (
                                 <div className="flex items-center gap-2 text-sm text-gray-600 mb-6">
                                     <ClockIcon className="w-4 h-4" />
                                     <span>最終更新: {lastUpdated}</span>
                                 </div>
                             )}
-
                             <div className="mb-4">
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     ステータスで絞り込み
@@ -1016,12 +942,10 @@
                                     ))}
                                 </div>
                             </div>
-
                             <div className="text-sm text-gray-600">
                                 {filteredSuggestions.length}件の投稿を表示中
                             </div>
                         </div>
-
                         {loading ? (
                             <div className="bg-white rounded-lg shadow-lg p-8 text-center">
                                 <RefreshIcon className="w-8 h-8 mx-auto mb-4 text-indigo-600" spin={true} />
@@ -1060,11 +984,6 @@
                                                 </div>
                                                 <div className="flex-grow">
                                                     <div className="flex items-center gap-3 mb-2 flex-wrap">
-                                                        {suggestion.category && (
-                                                            <span className="inline-block bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full border border-blue-200">
-                                                                📁 {suggestion.category}
-                                                            </span>
-                                                        )}
                                                         <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getStatusColor(suggestion.status)}`}>
                                                             {suggestion.status}
                                                         </span>
@@ -1080,7 +999,6 @@
                                                     </p>
                                                 </div>
                                             </div>
-
                                             {suggestion.response && (
                                                 <div className="bg-gray-50 rounded-lg p-4 border-l-4 border-indigo-600">
                                                     <div className="text-sm font-semibold text-gray-700 mb-2">
@@ -1097,7 +1015,6 @@
                                                     )}
                                                 </div>
                                             )}
-
                                             {!suggestion.response && suggestion.status !== '未確認' && (
                                                 <div className="bg-yellow-50 rounded-lg p-4 border-l-4 border-yellow-400">
                                                     <p className="text-sm text-yellow-800">
@@ -1114,7 +1031,6 @@
                 );
             };
 
-            // メインレンダー
             return (
                 <div className="min-h-screen bg-gray-50">
                     <Header />
@@ -1128,7 +1044,6 @@
             );
         };
 
-        // アプリケーションのレンダリング
         const rootElement = document.getElementById('root');
         if (rootElement) {
             const root = ReactDOM.createRoot(rootElement);
