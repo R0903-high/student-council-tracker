@@ -256,7 +256,13 @@
                     if (!response.ok) throw new Error('データの取得に失敗しました');
                     const data = await response.json();
                     console.log('Suggestions data:', data);
-                    setSuggestions(Array.isArray(data) ? data : []);
+                    
+                    // 「未確認」のものを除外
+                    const filteredData = Array.isArray(data) 
+                        ? data.filter(item => item.status !== '未確認')
+                        : [];
+                    
+                    setSuggestions(filteredData);
                     setLastUpdated(new Date().toLocaleString('ja-JP'));
                     setError(null);
                 } catch (err) {
@@ -892,6 +898,16 @@
                 const filteredSuggestions = suggestionStatusFilter === 'all' 
                     ? suggestions 
                     : suggestions.filter(s => s.status === suggestionStatusFilter);
+                
+                const [expandedSuggestions, setExpandedSuggestions] = useState({});
+                
+                const toggleExpand = (id) => {
+                    setExpandedSuggestions(prev => ({
+                        ...prev,
+                        [id]: !prev[id]
+                    }));
+                };
+                
                 return (
                     <div className="fade-in max-w-7xl mx-auto px-4 py-8">
                         <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg shadow-lg p-8 mb-8 text-white">
@@ -946,7 +962,7 @@
                                     ステータスで絞り込み
                                 </label>
                                 <div className="flex flex-wrap gap-2">
-                                    {['すべて', '未確認', '検討中', '回答作成中', '回答済', '実施決定', '対応不可'].map(status => (
+                                    {['すべて', '検討中', '回答作成中', '回答済', '実施決定', '対応不可'].map(status => (
                                         <button
                                             key={status}
                                             onClick={() => setSuggestionStatusFilter(status === 'すべて' ? 'all' : status)}
@@ -991,59 +1007,75 @@
                                         </p>
                                     </div>
                                 ) : (
-                                    filteredSuggestions.map((suggestion) => (
-                                        <div
-                                            key={suggestion.id}
-                                            className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6"
-                                        >
-                                            <div className="flex items-start gap-4 mb-4">
-                                                <div className="flex-shrink-0">
-                                                    <div className="bg-indigo-100 text-indigo-600 rounded-lg px-4 py-2 font-bold">
-                                                        ID: {suggestion.id}
+                                    filteredSuggestions.map((suggestion) => {
+                                        const isLongContent = suggestion.content && suggestion.content.length > 150;
+                                        const isExpanded = expandedSuggestions[suggestion.id];
+                                        const displayContent = isExpanded || !isLongContent 
+                                            ? suggestion.content 
+                                            : suggestion.content.substring(0, 150) + '...';
+                                        
+                                        return (
+                                            <div
+                                                key={suggestion.id}
+                                                className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6"
+                                            >
+                                                <div className="flex items-start gap-4 mb-4">
+                                                    <div className="flex-shrink-0">
+                                                        <div className="bg-indigo-100 text-indigo-600 rounded-lg px-4 py-2 font-bold">
+                                                            ID: {suggestion.id}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex-grow">
+                                                        <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                                            <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getStatusColor(suggestion.status)}`}>
+                                                                {suggestion.status}
+                                                            </span>
+                                                            {suggestion.timestamp && (
+                                                                <div className="flex items-center gap-1 text-xs text-gray-500">
+                                                                    <ClockIcon className="w-3 h-3" />
+                                                                    <span>投稿: {suggestion.timestamp}</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-gray-700 mb-2 leading-relaxed whitespace-pre-wrap">
+                                                            {displayContent}
+                                                        </p>
+                                                        {isLongContent && (
+                                                            <button
+                                                                onClick={() => toggleExpand(suggestion.id)}
+                                                                className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+                                                            >
+                                                                {isExpanded ? '▲ 折りたたむ' : '▼ もっと見る'}
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
-                                                <div className="flex-grow">
-                                                    <div className="flex items-center gap-3 mb-2 flex-wrap">
-                                                        <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getStatusColor(suggestion.status)}`}>
-                                                            {suggestion.status}
-                                                        </span>
-                                                        {suggestion.timestamp && (
-                                                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                                                {suggestion.response && (
+                                                    <div className="bg-gray-50 rounded-lg p-4 border-l-4 border-indigo-600">
+                                                        <div className="text-sm font-semibold text-gray-700 mb-2">
+                                                            生徒会からの回答:
+                                                        </div>
+                                                        <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                                                            {suggestion.response}
+                                                        </p>
+                                                        {suggestion.responseDate && (
+                                                            <div className="flex items-center gap-1 text-xs text-gray-500 mt-2">
                                                                 <ClockIcon className="w-3 h-3" />
-                                                                <span>投稿: {suggestion.timestamp}</span>
+                                                                <span>回答日: {suggestion.responseDate}</span>
                                                             </div>
                                                         )}
                                                     </div>
-                                                    <p className="text-gray-700 mb-3 leading-relaxed">
-                                                        {suggestion.summary}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            {suggestion.response && (
-                                                <div className="bg-gray-50 rounded-lg p-4 border-l-4 border-indigo-600">
-                                                    <div className="text-sm font-semibold text-gray-700 mb-2">
-                                                        生徒会からの回答:
+                                                )}
+                                                {!suggestion.response && suggestion.status !== '未確認' && (
+                                                    <div className="bg-yellow-50 rounded-lg p-4 border-l-4 border-yellow-400">
+                                                        <p className="text-sm text-yellow-800">
+                                                            現在対応中です。もうしばらくお待ちください。
+                                                        </p>
                                                     </div>
-                                                    <p className="text-gray-700 leading-relaxed">
-                                                        {suggestion.response}
-                                                    </p>
-                                                    {suggestion.responseDate && (
-                                                        <div className="flex items-center gap-1 text-xs text-gray-500 mt-2">
-                                                            <ClockIcon className="w-3 h-3" />
-                                                            <span>回答日: {suggestion.responseDate}</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                            {!suggestion.response && suggestion.status !== '未確認' && (
-                                                <div className="bg-yellow-50 rounded-lg p-4 border-l-4 border-yellow-400">
-                                                    <p className="text-sm text-yellow-800">
-                                                        現在対応中です。もうしばらくお待ちください。
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))
+                                                )}
+                                            </div>
+                                        );
+                                    })
                                 )}
                             </div>
                         )}
