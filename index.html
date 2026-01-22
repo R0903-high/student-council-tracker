@@ -30,6 +30,18 @@
         .animate-pulse {
             animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
+        @keyframes slideDown {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .slide-down {
+            animation: slideDown 0.3s ease-out;
+        }
+        .north-star-banner {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-left: 4px solid #f59e0b;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
     </style>
 </head>
 <body>
@@ -86,7 +98,6 @@
             </svg>
         );
 
-        // 未読バッジコンポーネント
         const UnreadBadge = ({ count }) => {
             if (count === 0) return null;
             const displayCount = count > 99 ? '99+' : count;
@@ -117,6 +128,7 @@
             const [unreadSuggestionsCount, setUnreadSuggestionsCount] = useState(0);
             const [discussions, setDiscussions] = useState([]);
             const [reactions, setReactions] = useState({});
+            const [userReactions, setUserReactions] = useState({});
  
             // API URLs
             const TASKS_API_URL = 'https://script.google.com/macros/s/AKfycby2vNpYa55_u_u-OR8mP9oDRbZIjGVtSzWhTJ3zlwA-F4G3UpKGU6uKvPBv8pNBRZZa/exec';
@@ -134,7 +146,6 @@
                 { id: 'suggestion-box', label: 'デジタル目安箱', icon: '📮', unreadKey: 'suggestions' },
             ];
 
-            // 汎用的なfetch関数（エラーハンドリング強化版）
             const fetchWithTimeout = async (url, options = {}, timeout = 10000) => {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -157,8 +168,10 @@
             useEffect(() => {
                 const savedAnnouncementsView = JSON.parse(localStorage.getItem('lastViewedAnnouncements') || '{}');
                 const savedSuggestionsView = JSON.parse(localStorage.getItem('lastViewedSuggestions') || '{}');
+                const savedUserReactions = JSON.parse(localStorage.getItem('userReactions') || '{}');
                 setLastViewedAnnouncements(savedAnnouncementsView);
                 setLastViewedSuggestions(savedSuggestionsView);
+                setUserReactions(savedUserReactions);
             }, []);
 
             useEffect(() => {
@@ -177,6 +190,7 @@
                     markAnnouncementsAsViewed();
                 } else if (currentPage === 'discussion-map') {
                     loadDiscussions();
+                    loadReactions();
                 } else if (currentPage === 'home') {
                     loadAnnouncements();
                     loadSuggestions();
@@ -190,8 +204,12 @@
                         loadTasks();
                     } else if (currentPage === 'suggestion-box') {
                         loadSuggestions();
+                        loadReactions();
                     } else if (currentPage === 'announcements') {
                         loadAnnouncements();
+                    } else if (currentPage === 'discussion-map') {
+                        loadDiscussions();
+                        loadReactions();
                     } else if (currentPage === 'home') {
                         loadAnnouncements();
                         loadSuggestions();
@@ -389,15 +407,21 @@
                     return;
                 }
                 
+                // 重複チェック
+                const key = `${suggestionId}-${reactionType}`;
+                if (userReactions[key]) {
+                    alert('すでにこの反応を送信済みです');
+                    return;
+                }
+                
                 try {
                     console.log('Sending reaction:', { suggestionId, reactionType });
                     
-                    // Google Apps ScriptのPOSTリクエストは特殊な処理が必要
                     const response = await fetch(REACTIONS_API_URL, {
                         method: 'POST',
-                        mode: 'no-cors', // Google Apps Scriptの場合はno-corsを使用
+                        mode: 'no-cors',
                         headers: {
-                            'Content-Type': 'text/plain', // text/plainに変更
+                            'Content-Type': 'text/plain',
                         },
                         body: JSON.stringify({
                             suggestionId: String(suggestionId),
@@ -405,13 +429,16 @@
                         })
                     });
                     
-                    // no-corsモードではレスポンスが読めないため、少し待ってからデータを再読み込み
+                    // ローカルに記録
+                    const newUserReactions = { ...userReactions, [key]: true };
+                    setUserReactions(newUserReactions);
+                    localStorage.setItem('userReactions', JSON.stringify(newUserReactions));
+                    
                     console.log('Reaction sent, reloading data...');
                     setTimeout(() => {
                         loadReactions();
                     }, 1000);
                     
-                    // ユーザーにフィードバック
                     const button = event?.target?.closest('button');
                     if (button) {
                         const originalText = button.innerHTML;
@@ -443,7 +470,9 @@
                     '回答作成中': 'bg-yellow-100 text-yellow-800 border-yellow-300',
                     '回答済': 'bg-green-100 text-green-800 border-green-300',
                     '実施決定': 'bg-emerald-100 text-emerald-800 border-emerald-300',
-                    '対応不可': 'bg-red-100 text-red-800 border-red-300'
+                    '対応不可': 'bg-red-100 text-red-800 border-red-300',
+                    '合意済み': 'bg-green-100 text-green-800 border-green-300',
+                    '議論中': 'bg-blue-100 text-blue-800 border-blue-300'
                 };
                 return colors[status] || 'bg-gray-100 text-gray-800 border-gray-300';
             };
@@ -530,6 +559,21 @@
             const categories = ['all', ...new Set(tasks.map(t => t.category).filter(Boolean))];
             const statuses = ['未着手', '検討中', '審議中', '進行中', '保留', '可決', '否決', '完了'];
 
+            // North Star コンポーネント（全ページ共通）
+            const NorthStar = () => (
+                <div className="north-star-banner slide-down sticky top-16 z-40 px-4 py-3 mb-6">
+                    <div className="max-w-7xl mx-auto flex items-start gap-3">
+                        <div className="text-3xl flex-shrink-0">⭐</div>
+                        <div className="flex-grow">
+                            <h3 className="font-bold text-gray-800 mb-1 text-sm sm:text-base">私たちの北極星（上位目標）</h3>
+                            <p className="text-gray-700 leading-relaxed text-sm sm:text-base">
+                                誰もが自分らしく、かつ周囲から信頼され学業に集中できる学校をつくる
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            );
+
             const Header = () => (
                 <header className="bg-white shadow-md sticky top-0 z-50">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -593,20 +637,6 @@
                 </header>
             );
 
-            const NorthStar = () => (
-                <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border-l-4 border-yellow-500 p-4 mb-6">
-                    <div className="flex items-start gap-3">
-                        <div className="text-3xl">⭐</div>
-                        <div>
-                            <h3 className="font-bold text-gray-800 mb-1">私たちの北極星（上位目標）</h3>
-                            <p className="text-gray-700 leading-relaxed">
-                                誰もが自分らしく、かつ周囲から信頼され学業に集中できる学校をつくる
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            );
-
             const HomePage = () => {
                 const latestAnnouncements = announcements.slice(0, 5);
                 return (
@@ -622,6 +652,9 @@
                                 </p>
                             </div>
                         </section>
+                        
+                        <NorthStar />
+                        
                         {latestAnnouncements.length > 0 && (
                             <section className="py-12 bg-gray-50">
                                 <div className="max-w-6xl mx-auto px-4">
@@ -677,6 +710,7 @@
                                 </div>
                             </section>
                         )}
+                        
                         <section className="py-16 bg-white">
                             <div className="max-w-6xl mx-auto px-4">
                                 <h3 className="text-3xl font-bold text-center mb-12 text-gray-800">
@@ -700,6 +734,7 @@
                                 </div>
                             </div>
                         </section>
+                        
                         <section className="py-16 bg-gray-50">
                             <div className="max-w-4xl mx-auto px-4 text-center">
                                 <h3 className="text-3xl font-bold mb-6 text-gray-800">
@@ -728,204 +763,23 @@
                 );
             };
 
-            const DashboardPage = () => (
-                <div className="fade-in max-w-7xl mx-auto px-4 py-8">
-                    <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-                            <div>
-                                <h2 className="text-3xl font-bold text-gray-800">
-                                    タスク管理ダッシュボード
-                                </h2>
-                                <p className="text-sm text-gray-600 mt-1">
-                                    生徒会の活動状況をリアルタイムで確認
-                                </p>
-                            </div>
-                            <button
-                                onClick={loadTasks}
-                                disabled={loading}
-                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
-                            >
-                                <RefreshIcon className="w-4 h-4" spin={loading} />
-                                <span>更新</span>
-                            </button>
-                        </div>
-                        {lastUpdated && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600 mb-6">
-                                <ClockIcon className="w-4 h-4" />
-                                <span>最終更新: {lastUpdated}</span>
-                            </div>
-                        )}
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    カテゴリで絞り込み
-                                </label>
-                                <div className="flex flex-wrap gap-2">
-                                    {categories.map(cat => (
-                                        <button
-                                            key={cat}
-                                            onClick={() => setSelectedCategory(cat)}
-                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                                selectedCategory === cat
-                                                    ? 'bg-indigo-600 text-white'
-                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                            }`}
-                                        >
-                                            {cat === 'all' ? 'すべて' : cat}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    ステータスで絞り込み（複数選択可）
-                                </label>
-                                <div className="flex flex-wrap gap-2">
-                                    {statuses.map(status => (
-                                        <label
-                                            key={status}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors ${
-                                                selectedStatuses.includes(status)
-                                                    ? getStatusColor(status)
-                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                            }`}
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedStatuses.includes(status)}
-                                                onChange={() => toggleStatus(status)}
-                                                className="w-4 h-4 rounded"
-                                            />
-                                            <span>{status}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    並び順
-                                </label>
-                                <select
-                                    value={sortOrder}
-                                    onChange={(e) => setSortOrder(e.target.value)}
-                                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                >
-                                    <option value="desc">新しい順</option>
-                                    <option value="asc">古い順</option>
-                                </select>
-                            </div>
-                            <div className="text-sm text-gray-600">
-                                {displayedTasks.length}件のタスクを表示中
-                            </div>
-                        </div>
-                    </div>
-                    {loading ? (
-                        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-                            <RefreshIcon className="w-8 h-8 mx-auto mb-4 text-indigo-600" spin={true} />
-                            <p className="text-gray-600">読み込み中...</p>
-                        </div>
-                    ) : error ? (
-                        <div className="bg-white rounded-lg shadow-lg p-8">
-                            <div className="flex items-center gap-3 text-red-600 mb-4">
-                                <AlertIcon className="w-6 h-6" />
-                                <p className="font-medium">エラーが発生しました</p>
-                            </div>
-                            <p className="text-gray-600">{error}</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            {displayedTasks.length === 0 ? (
-                                <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-                                    <p className="text-gray-600">
-                                        条件に一致するタスクがありません
-                                    </p>
-                                </div>
-                            ) : (
-                                displayedTasks.map((task, index) => (
-                                    <div
-                                        key={task.id || index}
-                                        className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden"
-                                    >
-                                        <div className="flex flex-col sm:flex-row">
-                                            <div className="bg-gradient-to-b from-purple-600 to-indigo-600 p-4 sm:w-24 flex items-center justify-center">
-                                                <div className="text-center">
-                                                    <div className="text-white text-xs font-semibold mb-1">ID</div>
-                                                    <div className="bg-white bg-opacity-20 rounded-lg px-3 py-2">
-                                                        <span className="text-white font-mono font-bold text-xl">
-                                                            {task.id}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="flex-grow p-4">
-                                                {task.category && (
-                                                    <div className="mb-2">
-                                                        <span className="inline-block bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full border border-blue-200">
-                                                            📁 {task.category}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                                <h3 className="font-bold text-gray-800 text-lg mb-2">
-                                                    {task.name || task.title || '（タスク名なし）'}
-                                                </h3>
-                                                {(task.detail || task.description) && (
-                                                    <p className="text-sm text-gray-600 mb-3 leading-relaxed">
-                                                        {task.detail || task.description}
-                                                    </p>
-                                                )}
-                                                <div className="flex flex-wrap items-center gap-3">
-                                                    <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getStatusColor(task.status)}`}>
-                                                        {task.status}
-                                                    </span>
-                                                    {task.updated && (
-                                                        <div className="flex items-center gap-1 text-xs text-gray-500">
-                                                            <ClockIcon className="w-3 h-3" />
-                                                            <span>{task.updated}</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            {isValidUrl(task.url) && (
-                                                <div className="p-4 flex items-center justify-center border-t sm:border-t-0 sm:border-l border-gray-100">
-                                                    <a
-                                                        href={task.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors text-sm font-medium"
-                                                    >
-                                                        <span>詳細</span>
-                                                        <ExternalLinkIcon className="w-4 h-4" />
-                                                    </a>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    )}
-                </div>
-            );
 
-            const AnnouncementsPage = () => {
-                const filteredAnnouncements = announcementCategoryFilter === 'all'
-                    ? announcements
-                    : announcements.filter(a => a.category === announcementCategoryFilter);
-                return (
-                    <div className="fade-in max-w-7xl mx-auto px-4 py-8">
+            const DashboardPage = () => (
+                <div className="fade-in">
+                    <NorthStar />
+                    <div className="max-w-7xl mx-auto px-4 py-8">
                         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                                 <div>
-                                    <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
-                                        <BellIcon className="w-8 h-8 text-indigo-600" />
-                                        連絡掲示板
+                                    <h2 className="text-3xl font-bold text-gray-800">
+                                        タスク管理ダッシュボード
                                     </h2>
                                     <p className="text-sm text-gray-600 mt-1">
-                                        生徒会からの重要なお知らせ・イベント情報
+                                        生徒会の活動状況をリアルタイムで確認
                                     </p>
                                 </div>
                                 <button
-                                    onClick={loadAnnouncements}
+                                    onClick={loadTasks}
                                     disabled={loading}
                                     className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
                                 >
@@ -939,29 +793,68 @@
                                     <span>最終更新: {lastUpdated}</span>
                                 </div>
                             )}
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    カテゴリで絞り込み
-                                </label>
-                                <div className="flex flex-wrap gap-2">
-                                    {['すべて', '緊急', '総会', 'イベント', 'お知らせ'].map(cat => (
-                                        <button
-                                            key={cat}
-                                            onClick={() => setAnnouncementCategoryFilter(cat === 'すべて' ? 'all' : cat)}
-                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                                (cat === 'すべて' && announcementCategoryFilter === 'all') ||
-                                                announcementCategoryFilter === cat
-                                                    ? 'bg-indigo-600 text-white'
-                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                            }`}
-                                        >
-                                            {cat}
-                                        </button>
-                                    ))}
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        カテゴリで絞り込み
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {categories.map(cat => (
+                                            <button
+                                                key={cat}
+                                                onClick={() => setSelectedCategory(cat)}
+                                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                                    selectedCategory === cat
+                                                        ? 'bg-indigo-600 text-white'
+                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                }`}
+                                            >
+                                                {cat === 'all' ? 'すべて' : cat}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="text-sm text-gray-600">
-                                {filteredAnnouncements.length}件の連絡を表示中
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        ステータスで絞り込み（複数選択可）
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {statuses.map(status => (
+                                            <label
+                                                key={status}
+                                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors ${
+                                                    selectedStatuses.includes(status)
+                                                        ? getStatusColor(status)
+                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                }`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedStatuses.includes(status)}
+                                                    onChange={() => toggleStatus(status)}
+                                                    className="w-4 h-4 rounded"
+                                                />
+                                                <span>{status}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        並び順
+                                    </label>
+                                    <select
+                                        value={sortOrder}
+                                        onChange={(e) => setSortOrder(e.target.value)}
+                                        className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        <option value="desc">新しい順</option>
+                                        <option value="asc">古い順</option>
+                                    </select>
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                    {displayedTasks.length}件のタスクを表示中
+                                </div>
                             </div>
                         </div>
                         {loading ? (
@@ -979,60 +872,70 @@
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                {filteredAnnouncements.length === 0 ? (
+                                {displayedTasks.length === 0 ? (
                                     <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-                                        <BellIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                                         <p className="text-gray-600">
-                                            {announcementCategoryFilter === 'all'
-                                                ? 'まだ連絡がありません'
-                                                : `「${announcementCategoryFilter}」の連絡はありません`}
+                                            条件に一致するタスクがありません
                                         </p>
                                     </div>
                                 ) : (
-                                    filteredAnnouncements.map((announcement) => (
+                                    displayedTasks.map((task, index) => (
                                         <div
-                                            key={announcement.id}
-                                            className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border-l-4 ${
-                                                announcement.category === '緊急'
-                                                    ? 'border-red-500'
-                                                    : 'border-indigo-500'
-                                            }`}
+                                            key={task.id || index}
+                                            className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden"
                                         >
-                                            <div className="flex items-start gap-4 mb-4">
-                                                <div className="text-4xl">{getCategoryIcon(announcement.category)}</div>
-                                                <div className="flex-grow">
-                                                    <div className="flex items-center gap-3 mb-2 flex-wrap">
-                                                        <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getCategoryColor(announcement.category)}`}>
-                                                            {announcement.category}
-                                                        </span>
-                                                        <div className="flex items-center gap-1 text-sm text-gray-500">
-                                                            <ClockIcon className="w-4 h-4" />
-                                                            <span>{announcement.date} ({getRelativeTime(announcement.date)})</span>
+                                            <div className="flex flex-col sm:flex-row">
+                                                <div className="bg-gradient-to-b from-purple-600 to-indigo-600 p-4 sm:w-24 flex items-center justify-center">
+                                                    <div className="text-center">
+                                                        <div className="text-white text-xs font-semibold mb-1">ID</div>
+                                                        <div className="bg-white bg-opacity-20 rounded-lg px-3 py-2">
+                                                            <span className="text-white font-mono font-bold text-xl">
+                                                                {task.id}
+                                                            </span>
                                                         </div>
                                                     </div>
-                                                    <h3 className="text-xl font-bold text-gray-800 mb-3">
-                                                        {announcement.title}
-                                                    </h3>
-                                                    <p className="text-gray-700 leading-relaxed whitespace-pre-wrap mb-4">
-                                                        {announcement.content}
-                                                    </p>
-                                                    {isValidUrl(announcement.link) && (
-                                                        <a
-                                                            href={announcement.link}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-medium"
-                                                        >
-                                                            <span>詳細を見る</span>
-                                                            <ExternalLinkIcon className="w-4 h-4" />
-                                                        </a>
-                                                    )}
-                                                    {announcement.expires && (
-                                                        <div className="mt-3 text-xs text-gray-500">
-                                                            表示期限: {announcement.expires}
+                                                </div>
+                                                <div className="flex-grow p-4">
+                                                    {task.category && (
+                                                        <div className="mb-2">
+                                                            <span className="inline-block bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full border border-blue-200">
+                                                                📁 {task.category}
+                                                            </span>
                                                         </div>
                                                     )}
+                                                    <h3 className="font-bold text-gray-800 text-lg mb-2">
+                                                        {task.name || task.title || '（タスク名なし）'}
+                                                    </h3>
+                                                    {(task.detail || task.description) && (
+                                                        <p className="text-sm text-gray-600 mb-3 leading-relaxed">
+                                                            {task.detail || task.description}
+                                                        </p>
+                                                    )}
+                                                    <div className="flex flex-wrap items-center gap-3">
+                                                        <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getStatusColor(task.status)}`}>
+                                                            {task.status}
+                                                        </span>
+                                                        {task.updated && (
+                                                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                                                                <ClockIcon className="w-3 h-3" />
+                                                                <span>{task.updated}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
+                                                {isValidUrl(task.url) && (
+                                                    <div className="p-4 flex items-center justify-center border-t sm:border-t-0 sm:border-l border-gray-100">
+                                                        <a
+                                                            href={task.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors text-sm font-medium"
+                                                        >
+                                                            <span>詳細</span>
+                                                            <ExternalLinkIcon className="w-4 h-4" />
+                                                        </a>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     ))
@@ -1040,8 +943,8 @@
                             </div>
                         )}
                     </div>
-                );
-            };
+                </div>
+            );
 
             const DiscussionMapPage = () => {
                 const getStatusIcon = (status) => {
@@ -1053,15 +956,6 @@
                     return icons[status] || '📋';
                 };
 
-                const getStatusColor = (status) => {
-                    const colors = {
-                        '合意済み': 'bg-green-100 text-green-800 border-green-300',
-                        '議論中': 'bg-blue-100 text-blue-800 border-blue-300',
-                        '未着手': 'bg-gray-100 text-gray-800 border-gray-300'
-                    };
-                    return colors[status] || 'bg-gray-100 text-gray-800 border-gray-300';
-                };
-
                 const statusCounts = discussions.reduce((acc, d) => {
                     acc[d.status] = (acc[d.status] || 0) + 1;
                     return acc;
@@ -1071,81 +965,295 @@
                 const agreedCount = statusCounts['合意済み'] || 0;
                 const progressPercent = totalDiscussions > 0 ? Math.round((agreedCount / totalDiscussions) * 100) : 0;
 
+                // リアルタイム集計パネルのデータ
+                const totalReactionCount = Object.values(reactions).reduce((sum, reactionObj) => {
+                    return sum + Object.values(reactionObj).reduce((s, count) => s + count, 0);
+                }, 0);
+
                 return (
-                    <div className="fade-in max-w-7xl mx-auto px-4 py-8">
+                    <div className="fade-in">
                         <NorthStar />
                         
-                        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-                            <h2 className="text-3xl font-bold text-gray-800 mb-2">議論マップ</h2>
-                            <p className="text-gray-600 mb-6">
-                                対立点を整理し、全員が納得できる解を見つけるための進捗を可視化します
-                            </p>
+                        <div className="max-w-7xl mx-auto px-4 py-8">
+                            <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                                <h2 className="text-3xl font-bold text-gray-800 mb-2">議論マップ</h2>
+                                <p className="text-gray-600 mb-6">
+                                    対立点を整理し、全員が納得できる解を見つけるための進捗を可視化します
+                                </p>
 
-                            <div className="mb-6">
-                                <div className="flex justify-between items-center mb-2">
-                                    <span className="text-sm font-medium text-gray-700">全体の合意進捗</span>
-                                    <span className="text-sm font-bold text-indigo-600">{progressPercent}%</span>
+                                {/* リアルタイム集計パネル */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                    <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 p-4 rounded-lg border border-indigo-200">
+                                        <div className="text-sm text-indigo-600 font-medium mb-1">全体の合意率</div>
+                                        <div className="text-3xl font-bold text-indigo-700">{progressPercent}%</div>
+                                        <div className="text-xs text-indigo-600 mt-1">{agreedCount}/{totalDiscussions} 件が合意済み</div>
+                                    </div>
+                                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200">
+                                        <div className="text-sm text-purple-600 font-medium mb-1">参加者の声</div>
+                                        <div className="text-3xl font-bold text-purple-700">{totalReactionCount}</div>
+                                        <div className="text-xs text-purple-600 mt-1">件の意思表示</div>
+                                    </div>
+                                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
+                                        <div className="text-sm text-blue-600 font-medium mb-1">議論中のトピック</div>
+                                        <div className="text-3xl font-bold text-blue-700">{statusCounts['議論中'] || 0}</div>
+                                        <div className="text-xs text-blue-600 mt-1">件が進行中</div>
+                                    </div>
                                 </div>
-                                <div className="w-full bg-gray-200 rounded-full h-4">
-                                    <div
-                                        className="bg-gradient-to-r from-indigo-500 to-purple-500 h-4 rounded-full transition-all duration-500"
-                                        style={{ width: `${progressPercent}%` }}
-                                    ></div>
-                                </div>
-                                <div className="flex justify-between mt-2 text-xs text-gray-600">
-                                    <span>✅ 合意済み: {agreedCount}件</span>
-                                    <span>💬 議論中: {statusCounts['議論中'] || 0}件</span>
-                                    <span>📋 未着手: {statusCounts['未着手'] || 0}件</span>
+
+                                {/* 進捗バー */}
+                                <div className="mb-6">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-sm font-medium text-gray-700">全体の合意進捗</span>
+                                        <span className="text-sm font-bold text-indigo-600">{progressPercent}%</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-4">
+                                        <div
+                                            className="bg-gradient-to-r from-indigo-500 to-purple-500 h-4 rounded-full transition-all duration-500"
+                                            style={{ width: `${progressPercent}%` }}
+                                        ></div>
+                                    </div>
+                                    <div className="flex justify-between mt-2 text-xs text-gray-600">
+                                        <span>✅ 合意済み: {agreedCount}件</span>
+                                        <span>💬 議論中: {statusCounts['議論中'] || 0}件</span>
+                                        <span>📋 未着手: {statusCounts['未着手'] || 0}件</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <div className="space-y-4">
-                            {discussions.length === 0 ? (
+                            {/* 議論一覧 */}
+                            <div className="space-y-4">
+                                {discussions.length === 0 ? (
+                                    <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                                        <p className="text-gray-600">まだ議論が登録されていません</p>
+                                    </div>
+                                ) : (
+                                    discussions.map((discussion) => {
+                                        const discussionReactions = reactions[discussion.id] || {};
+                                        const totalReactions = Object.values(discussionReactions).reduce((sum, count) => sum + count, 0);
+                                        
+                                        return (
+                                            <div
+                                                key={discussion.id}
+                                                className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6"
+                                            >
+                                                <div className="flex items-start gap-4">
+                                                    <div className="text-3xl">{getStatusIcon(discussion.status)}</div>
+                                                    <div className="flex-grow">
+                                                        <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                                            {discussion.category && (
+                                                                <span className="bg-purple-100 text-purple-800 text-xs font-semibold px-3 py-1 rounded-full">
+                                                                    {discussion.category}
+                                                                </span>
+                                                            )}
+                                                            <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getStatusColor(discussion.status)}`}>
+                                                                {discussion.status}
+                                                            </span>
+                                                            {discussion.updated && (
+                                                                <span className="text-xs text-gray-500">
+                                                                    更新: {discussion.updated}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <h3 className="text-xl font-bold text-gray-800 mb-2">
+                                                            {discussion.topic}
+                                                        </h3>
+                                                        {discussion.description && (
+                                                            <p className="text-gray-700 leading-relaxed mb-3 whitespace-pre-wrap">
+                                                                {discussion.description}
+                                                            </p>
+                                                        )}
+                                                        {discussion.relatedIds && discussion.relatedIds.length > 0 && (
+                                                            <div className="mt-3 text-sm text-gray-600">
+                                                                関連する目安箱: ID {discussion.relatedIds.join(', ')}
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {/* 意思表示ボタン（議論マップ） */}
+                                                        <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                                                            <p className="text-xs text-gray-600 mb-2">この論点に対するあなたの反応：</p>
+                                                            <div className="flex gap-2 flex-wrap">
+                                                                {['納得', '共感する', '懸念が残る'].map(reactionType => {
+                                                                    const count = discussionReactions[reactionType] || 0;
+                                                                    const key = `${discussion.id}-${reactionType}`;
+                                                                    const hasReacted = userReactions[key];
+                                                                    
+                                                                    return (
+                                                                        <button
+                                                                            key={reactionType}
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                addReaction(discussion.id, reactionType, e);
+                                                                            }}
+                                                                            disabled={hasReacted}
+                                                                            className={`flex items-center gap-1 px-3 py-1.5 rounded-full transition-colors text-sm ${
+                                                                                hasReacted 
+                                                                                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                                                                                    : 'bg-white border border-gray-300 hover:bg-indigo-50 hover:border-indigo-300'
+                                                                            }`}
+                                                                        >
+                                                                            <span>{reactionType === '納得' ? '👍' : reactionType === '共感する' ? '❤️' : '🤔'}</span>
+                                                                            <span>{reactionType}</span>
+                                                                            {count > 0 && (
+                                                                                <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-bold">
+                                                                                    {count}
+                                                                                </span>
+                                                                            )}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                            {totalReactions > 0 && (
+                                                                <div className="text-xs text-gray-500 mt-2">
+                                                                    💬 {totalReactions}人が意思表示しています
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+
+            const AnnouncementsPage = () => {
+                const filteredAnnouncements = announcementCategoryFilter === 'all'
+                    ? announcements
+                    : announcements.filter(a => a.category === announcementCategoryFilter);
+                return (
+                    <div className="fade-in">
+                        <NorthStar />
+                        <div className="max-w-7xl mx-auto px-4 py-8">
+                            <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                                    <div>
+                                        <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
+                                            <BellIcon className="w-8 h-8 text-indigo-600" />
+                                            連絡掲示板
+                                        </h2>
+                                        <p className="text-sm text-gray-600 mt-1">
+                                            生徒会からの重要なお知らせ・イベント情報
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={loadAnnouncements}
+                                        disabled={loading}
+                                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                                    >
+                                        <RefreshIcon className="w-4 h-4" spin={loading} />
+                                        <span>更新</span>
+                                    </button>
+                                </div>
+                                {lastUpdated && (
+                                    <div className="flex items-center gap-2 text-sm text-gray-600 mb-6">
+                                        <ClockIcon className="w-4 h-4" />
+                                        <span>最終更新: {lastUpdated}</span>
+                                    </div>
+                                )}
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        カテゴリで絞り込み
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {['すべて', '緊急', '総会', 'イベント', 'お知らせ'].map(cat => (
+                                            <button
+                                                key={cat}
+                                                onClick={() => setAnnouncementCategoryFilter(cat === 'すべて' ? 'all' : cat)}
+                                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                                    (cat === 'すべて' && announcementCategoryFilter === 'all') ||
+                                                    announcementCategoryFilter === cat
+                                                        ? 'bg-indigo-600 text-white'
+                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                }`}
+                                            >
+                                                {cat}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                    {filteredAnnouncements.length}件の連絡を表示中
+                                </div>
+                            </div>
+                            {loading ? (
                                 <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-                                    <p className="text-gray-600">まだ議論が登録されていません</p>
+                                    <RefreshIcon className="w-8 h-8 mx-auto mb-4 text-indigo-600" spin={true} />
+                                    <p className="text-gray-600">読み込み中...</p>
+                                </div>
+                            ) : error ? (
+                                <div className="bg-white rounded-lg shadow-lg p-8">
+                                    <div className="flex items-center gap-3 text-red-600 mb-4">
+                                        <AlertIcon className="w-6 h-6" />
+                                        <p className="font-medium">エラーが発生しました</p>
+                                    </div>
+                                    <p className="text-gray-600">{error}</p>
                                 </div>
                             ) : (
-                                discussions.map((discussion) => (
-                                    <div
-                                        key={discussion.id}
-                                        className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6"
-                                    >
-                                        <div className="flex items-start gap-4">
-                                            <div className="text-3xl">{getStatusIcon(discussion.status)}</div>
-                                            <div className="flex-grow">
-                                                <div className="flex items-center gap-3 mb-2 flex-wrap">
-                                                    {discussion.category && (
-                                                        <span className="bg-purple-100 text-purple-800 text-xs font-semibold px-3 py-1 rounded-full">
-                                                            {discussion.category}
-                                                        </span>
-                                                    )}
-                                                    <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getStatusColor(discussion.status)}`}>
-                                                        {discussion.status}
-                                                    </span>
-                                                    {discussion.updated && (
-                                                        <span className="text-xs text-gray-500">
-                                                            更新: {discussion.updated}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <h3 className="text-xl font-bold text-gray-800 mb-2">
-                                                    {discussion.topic}
-                                                </h3>
-                                                {discussion.description && (
-                                                    <p className="text-gray-700 leading-relaxed mb-3 whitespace-pre-wrap">
-                                                        {discussion.description}
-                                                    </p>
-                                                )}
-                                                {discussion.relatedIds && discussion.relatedIds.length > 0 && (
-                                                    <div className="mt-3 text-sm text-gray-600">
-                                                        関連する目安箱: ID {discussion.relatedIds.join(', ')}
-                                                    </div>
-                                                )}
-                                            </div>
+                                <div className="space-y-4">
+                                    {filteredAnnouncements.length === 0 ? (
+                                        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                                            <BellIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                                            <p className="text-gray-600">
+                                                {announcementCategoryFilter === 'all'
+                                                    ? 'まだ連絡がありません'
+                                                    : `「${announcementCategoryFilter}」の連絡はありません`}
+                                            </p>
                                         </div>
-                                    </div>
-                                ))
+                                    ) : (
+                                        filteredAnnouncements.map((announcement) => (
+                                            <div
+                                                key={announcement.id}
+                                                className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border-l-4 ${
+                                                    announcement.category === '緊急'
+                                                        ? 'border-red-500'
+                                                        : 'border-indigo-500'
+                                                }`}
+                                            >
+                                                <div className="flex items-start gap-4 mb-4">
+                                                    <div className="text-4xl">{getCategoryIcon(announcement.category)}</div>
+                                                    <div className="flex-grow">
+                                                        <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                                            <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getCategoryColor(announcement.category)}`}>
+                                                                {announcement.category}
+                                                            </span>
+                                                            <div className="flex items-center gap-1 text-sm text-gray-500">
+                                                                <ClockIcon className="w-4 h-4" />
+                                                                <span>{announcement.date} ({getRelativeTime(announcement.date)})</span>
+                                                            </div>
+                                                        </div>
+                                                        <h3 className="text-xl font-bold text-gray-800 mb-3">
+                                                            {announcement.title}
+                                                        </h3>
+                                                        <p className="text-gray-700 leading-relaxed whitespace-pre-wrap mb-4">
+                                                            {announcement.content}
+                                                        </p>
+                                                        {isValidUrl(announcement.link) && (
+                                                            <a
+                                                                href={announcement.link}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-medium"
+                                                            >
+                                                                <span>詳細を見る</span>
+                                                                <ExternalLinkIcon className="w-4 h-4" />
+                                                            </a>
+                                                        )}
+                                                        {announcement.expires && (
+                                                            <div className="mt-3 text-xs text-gray-500">
+                                                                表示期限: {announcement.expires}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
                             )}
                         </div>
                     </div>
@@ -1167,205 +1275,218 @@
                 };
                 
                 return (
-                    <div className="fade-in max-w-7xl mx-auto px-4 py-8">
-                        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg shadow-lg p-8 mb-8 text-white">
-                            <div className="max-w-3xl mx-auto text-center">
-                                <MessageIcon className="w-16 h-16 mx-auto mb-4" />
-                                <h2 className="text-3xl font-bold mb-4">
-                                    デジタル目安箱
-                                </h2>
-                                <p className="text-lg mb-6 opacity-90">
-                                    あなたの声を聞かせてください。匿名で意見や要望を送ることができます。<br />
-                                    生徒会は全ての意見に真摯に向き合い、対応状況を公開します。
-                                </p>
-                                <a
-                                    href={GOOGLE_FORM_URL}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 bg-white text-indigo-600 px-8 py-3 rounded-lg font-bold text-lg hover:bg-gray-100 transition-colors shadow-lg"
-                                >
-                                    <MessageIcon className="w-5 h-5" />
-                                    <span>意見を送る</span>
-                                    <ExternalLinkIcon className="w-4 h-4" />
-                                </a>
-                            </div>
-                        </div>
-                        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-                                <div>
-                                    <h3 className="text-2xl font-bold text-gray-800">
-                                        投稿状況
-                                    </h3>
-                                    <p className="text-sm text-gray-600 mt-1">
-                                        生徒会への意見・要望の対応状況
+                    <div className="fade-in">
+                        <NorthStar />
+                        <div className="max-w-7xl mx-auto px-4 py-8">
+                            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg shadow-lg p-8 mb-8 text-white">
+                                <div className="max-w-3xl mx-auto text-center">
+                                    <MessageIcon className="w-16 h-16 mx-auto mb-4" />
+                                    <h2 className="text-3xl font-bold mb-4">
+                                        デジタル目安箱
+                                    </h2>
+                                    <p className="text-lg mb-6 opacity-90">
+                                        あなたの声を聞かせてください。匿名で意見や要望を送ることができます。<br />
+                                        生徒会は全ての意見に真摯に向き合い、対応状況を公開します。
                                     </p>
-                                </div>
-                                <button
-                                    onClick={loadSuggestions}
-                                    disabled={loading}
-                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
-                                >
-                                    <RefreshIcon className="w-4 h-4" spin={loading} />
-                                    <span>更新</span>
-                                </button>
-                            </div>
-                            {lastUpdated && (
-                                <div className="flex items-center gap-2 text-sm text-gray-600 mb-6">
-                                    <ClockIcon className="w-4 h-4" />
-                                    <span>最終更新: {lastUpdated}</span>
-                                </div>
-                            )}
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    ステータスで絞り込み
-                                </label>
-                                <div className="flex flex-wrap gap-2">
-                                    {['すべて', '検討中', '回答作成中', '回答済', '実施決定', '対応不可'].map(status => (
-                                        <button
-                                            key={status}
-                                            onClick={() => setSuggestionStatusFilter(status === 'すべて' ? 'all' : status)}
-                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                                (status === 'すべて' && suggestionStatusFilter === 'all') ||
-                                                suggestionStatusFilter === status
-                                                    ? 'bg-indigo-600 text-white'
-                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                            }`}
-                                        >
-                                            {status}
-                                        </button>
-                                    ))}
+                                    <a
+                                        href={GOOGLE_FORM_URL}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 bg-white text-indigo-600 px-8 py-3 rounded-lg font-bold text-lg hover:bg-gray-100 transition-colors shadow-lg"
+                                    >
+                                        <MessageIcon className="w-5 h-5" />
+                                        <span>意見を送る</span>
+                                        <ExternalLinkIcon className="w-4 h-4" />
+                                    </a>
                                 </div>
                             </div>
-                            <div className="text-sm text-gray-600">
-                                {filteredSuggestions.length}件の投稿を表示中
-                            </div>
-                        </div>
-                        {loading ? (
-                            <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-                                <RefreshIcon className="w-8 h-8 mx-auto mb-4 text-indigo-600" spin={true} />
-                                <p className="text-gray-600">読み込み中...</p>
-                            </div>
-                        ) : error ? (
-                            <div className="bg-white rounded-lg shadow-lg p-8">
-                                <div className="flex items-center gap-3 text-red-600 mb-4">
-                                    <AlertIcon className="w-6 h-6" />
-                                    <p className="font-medium">エラーが発生しました</p>
-                                </div>
-                                <p className="text-gray-600">{error}</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                {filteredSuggestions.length === 0 ? (
-                                    <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-                                        <MessageIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                                        <p className="text-gray-600">
-                                            {suggestionStatusFilter === 'all' 
-                                                ? 'まだ投稿がありません' 
-                                                : `「${suggestionStatusFilter}」の投稿はありません`}
+                            <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                                    <div>
+                                        <h3 className="text-2xl font-bold text-gray-800">
+                                            投稿状況
+                                        </h3>
+                                        <p className="text-sm text-gray-600 mt-1">
+                                            生徒会への意見・要望の対応状況
                                         </p>
                                     </div>
-                                ) : (
-                                    filteredSuggestions.map((suggestion) => {
-                                        const isLongContent = suggestion.content && suggestion.content.length > 150;
-                                        const isExpanded = expandedSuggestions[suggestion.id];
-                                        const displayContent = isExpanded || !isLongContent 
-                                            ? suggestion.content 
-                                            : suggestion.content.substring(0, 150) + '...';
-                                        
-                                        return (
-                                            <div
-                                                key={suggestion.id}
-                                                className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6"
+                                    <button
+                                        onClick={loadSuggestions}
+                                        disabled={loading}
+                                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                                    >
+                                        <RefreshIcon className="w-4 h-4" spin={loading} />
+                                        <span>更新</span>
+                                    </button>
+                                </div>
+                                {lastUpdated && (
+                                    <div className="flex items-center gap-2 text-sm text-gray-600 mb-6">
+                                        <ClockIcon className="w-4 h-4" />
+                                        <span>最終更新: {lastUpdated}</span>
+                                    </div>
+                                )}
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        ステータスで絞り込み
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {['すべて', '検討中', '回答作成中', '回答済', '実施決定', '対応不可'].map(status => (
+                                            <button
+                                                key={status}
+                                                onClick={() => setSuggestionStatusFilter(status === 'すべて' ? 'all' : status)}
+                                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                                    (status === 'すべて' && suggestionStatusFilter === 'all') ||
+                                                    suggestionStatusFilter === status
+                                                        ? 'bg-indigo-600 text-white'
+                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                }`}
                                             >
-                                                <div className="flex items-start gap-4 mb-4">
-                                                    <div className="flex-shrink-0">
-                                                        <div className="bg-indigo-100 text-indigo-600 rounded-lg px-4 py-2 font-bold">
-                                                            ID: {suggestion.id}
+                                                {status}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                    {filteredSuggestions.length}件の投稿を表示中
+                                </div>
+                            </div>
+                            {loading ? (
+                                <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                                    <RefreshIcon className="w-8 h-8 mx-auto mb-4 text-indigo-600" spin={true} />
+                                    <p className="text-gray-600">読み込み中...</p>
+                                </div>
+                            ) : error ? (
+                                <div className="bg-white rounded-lg shadow-lg p-8">
+                                    <div className="flex items-center gap-3 text-red-600 mb-4">
+                                        <AlertIcon className="w-6 h-6" />
+                                        <p className="font-medium">エラーが発生しました</p>
+                                    </div>
+                                    <p className="text-gray-600">{error}</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {filteredSuggestions.length === 0 ? (
+                                        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                                            <MessageIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                                            <p className="text-gray-600">
+                                                {suggestionStatusFilter === 'all' 
+                                                    ? 'まだ投稿がありません' 
+                                                    : `「${suggestionStatusFilter}」の投稿はありません`}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        filteredSuggestions.map((suggestion) => {
+                                            const isLongContent = suggestion.content && suggestion.content.length > 150;
+                                            const isExpanded = expandedSuggestions[suggestion.id];
+                                            const displayContent = isExpanded || !isLongContent 
+                                                ? suggestion.content 
+                                                : suggestion.content.substring(0, 150) + '...';
+                                            
+                                            const suggestionReactions = reactions[suggestion.id] || {};
+                                            
+                                            return (
+                                                <div
+                                                    key={suggestion.id}
+                                                    className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6"
+                                                >
+                                                    <div className="flex items-start gap-4 mb-4">
+                                                        <div className="flex-shrink-0">
+                                                            <div className="bg-indigo-100 text-indigo-600 rounded-lg px-4 py-2 font-bold">
+                                                                ID: {suggestion.id}
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    <div className="flex-grow">
-                                                        <div className="flex items-center gap-3 mb-2 flex-wrap">
-                                                            <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getStatusColor(suggestion.status)}`}>
-                                                                {suggestion.status}
-                                                            </span>
-                                                            {suggestion.timestamp && (
-                                                                <div className="flex items-center gap-1 text-xs text-gray-500">
-                                                                    <ClockIcon className="w-3 h-3" />
-                                                                    <span>投稿: {suggestion.timestamp}</span>
+                                                        <div className="flex-grow">
+                                                            <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                                                <span className={`px-3 py-1 rounded-full font-medium text-sm border ${getStatusColor(suggestion.status)}`}>
+                                                                    {suggestion.status}
+                                                                </span>
+                                                                {suggestion.timestamp && (
+                                                                    <div className="flex items-center gap-1 text-xs text-gray-500">
+                                                                        <ClockIcon className="w-3 h-3" />
+                                                                        <span>投稿: {suggestion.timestamp}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-gray-700 mb-2 leading-relaxed whitespace-pre-wrap">
+                                                                {displayContent}
+                                                            </p>
+                                                            {isLongContent && (
+                                                                <button
+                                                                    onClick={() => toggleExpand(suggestion.id)}
+                                                                    className="text-indigo-600 hover:text-indigo-700 text-sm font-medium mb-3"
+                                                                >
+                                                                    {isExpanded ? '▲ 折りたたむ' : '▼ もっと見る'}
+                                                                </button>
+                                                            )}
+                                                            
+                                                            {REACTIONS_API_URL && (
+                                                                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                                                                    <p className="text-xs text-gray-600 mb-2">この意見に対するあなたの反応：</p>
+                                                                    <div className="flex gap-2 flex-wrap">
+                                                                        {['納得', '共感する', '懸念が残る'].map(reactionType => {
+                                                                            const count = suggestionReactions[reactionType] || 0;
+                                                                            const key = `${suggestion.id}-${reactionType}`;
+                                                                            const hasReacted = userReactions[key];
+                                                                            
+                                                                            return (
+                                                                                <button
+                                                                                    key={reactionType}
+                                                                                    onClick={(e) => {
+                                                                                        e.preventDefault();
+                                                                                        addReaction(suggestion.id, reactionType, e);
+                                                                                    }}
+                                                                                    disabled={hasReacted}
+                                                                                    className={`flex items-center gap-1 px-3 py-1.5 rounded-full transition-colors text-sm ${
+                                                                                        hasReacted 
+                                                                                            ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                                                                                            : 'bg-white border border-gray-300 hover:bg-indigo-50 hover:border-indigo-300'
+                                                                                    }`}
+                                                                                >
+                                                                                    <span>{reactionType === '納得' ? '👍' : reactionType === '共感する' ? '❤️' : '🤔'}</span>
+                                                                                    <span>{reactionType}</span>
+                                                                                    {count > 0 && (
+                                                                                        <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-bold">
+                                                                                            {count}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </button>
+                                                                            );
+                                                                        })}
+                                                                    </div>
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        <p className="text-gray-700 mb-2 leading-relaxed whitespace-pre-wrap">
-                                                            {displayContent}
-                                                        </p>
-                                                        {isLongContent && (
-                                                            <button
-                                                                onClick={() => toggleExpand(suggestion.id)}
-                                                                className="text-indigo-600 hover:text-indigo-700 text-sm font-medium mb-3"
-                                                            >
-                                                                {isExpanded ? '▲ 折りたたむ' : '▼ もっと見る'}
-                                                            </button>
-                                                        )}
-                                                        
-                                                        {REACTIONS_API_URL && (
-                                                            <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                                                                <p className="text-xs text-gray-600 mb-2">この意見に対するあなたの反応：</p>
-                                                                <div className="flex gap-2 flex-wrap">
-                                                                    {['納得', '共感する', '懸念が残る'].map(reactionType => {
-                                                                        const count = reactions[suggestion.id]?.[reactionType] || 0;
-                                                                        return (
-                                                                            <button
-                                                                                key={reactionType}
-                                                                                onClick={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    addReaction(suggestion.id, reactionType, e);
-                                                                                }}
-                                                                                className="flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-300 rounded-full hover:bg-indigo-50 hover:border-indigo-300 transition-colors text-sm"
-                                                                            >
-                                                                                <span>{reactionType === '納得' ? '👍' : reactionType === '共感する' ? '❤️' : '🤔'}</span>
-                                                                                <span>{reactionType}</span>
-                                                                                {count > 0 && (
-                                                                                    <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-bold">
-                                                                                        {count}
-                                                                                    </span>
-                                                                                )}
-                                                                            </button>
-                                                                        );
-                                                                    })}
+                                                    </div>
+                                                    {suggestion.response && (
+                                                        <div className="bg-gray-50 rounded-lg p-4 border-l-4 border-indigo-600">
+                                                            <div className="text-sm font-semibold text-gray-700 mb-2">
+                                                                生徒会からの回答:
+                                                            </div>
+                                                            <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                                                                {suggestion.response}
+                                                            </p>
+                                                            {suggestion.responseDate && (
+                                                                <div className="flex items-center gap-1 text-xs text-gray-500 mt-2">
+                                                                    <ClockIcon className="w-3 h-3" />
+                                                                    <span>回答日: {suggestion.responseDate}</span>
                                                                 </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                {suggestion.response && (
-                                                    <div className="bg-gray-50 rounded-lg p-4 border-l-4 border-indigo-600">
-                                                        <div className="text-sm font-semibold text-gray-700 mb-2">
-                                                            生徒会からの回答:
+                                                            )}
                                                         </div>
-                                                        <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                                                            {suggestion.response}
-                                                        </p>
-                                                        {suggestion.responseDate && (
-                                                            <div className="flex items-center gap-1 text-xs text-gray-500 mt-2">
-                                                                <ClockIcon className="w-3 h-3" />
-                                                                <span>回答日: {suggestion.responseDate}</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                                {!suggestion.response && suggestion.status !== '未確認' && (
-                                                    <div className="bg-yellow-50 rounded-lg p-4 border-l-4 border-yellow-400">
-                                                        <p className="text-sm text-yellow-800">
-                                                            現在対応中です。もうしばらくお待ちください。
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })
-                                )}
-                            </div>
-                        )}
+                                                    )}
+                                                    {!suggestion.response && suggestion.status !== '未確認' && (
+                                                        <div className="bg-yellow-50 rounded-lg p-4 border-l-4 border-yellow-400">
+                                                            <p className="text-sm text-yellow-800">
+                                                                現在対応中です。もうしばらくお待ちください。
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 );
             };
