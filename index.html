@@ -123,7 +123,7 @@
             const SUGGESTIONS_API_URL = 'https://script.google.com/macros/s/AKfycbxTfES8lpILEgjPN6xYWwtCiK8ILgasfDp65djK20ZWqUIZtcWsHtMeTSv9hk5Nu0qhzQ/exec';
             const ANNOUNCEMENTS_API_URL = 'https://script.google.com/macros/s/AKfycbxtTSAUgLc8SsrsS_Fzg7wurIwsCaYYBdzLNSBiw98yqSOsh7ek9dj9yPIOdX1eNaCK/exec';
             const DISCUSSIONS_API_URL = 'https://script.google.com/macros/s/AKfycbylSrVTm-zKekhxYSBqvvN2IkQNiBCRKR7zdLGynIQ2jfZOM5evJ-16ATNPqdIw3KfeAQ/exec';
-            const REACTIONS_API_URL = 'https://script.google.com/macros/s/AKfycbzc7NTpdVw2t7ei3XSsNSOR-fC-XFPE0liLZHYA5P7INsSxNl4eRbIIgA4wuqnp5XQ/exec'; // 意思表示APIのURLをここに設定
+            const REACTIONS_API_URL = 'https://script.google.com/macros/s/AKfycbzc7NTpdVw2t7ei3XSsNSOR-fC-XFPE0liLZHYA5P7INsSxNl4eRbIIgA4wuqnp5XQ/exec';
             const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSf6DovixYdqNS944GmwpjlI-eRsabNXIoAzZGUZt5A7tQZyQA/viewform?usp=dialog';
 
             const navigation = [
@@ -133,6 +133,26 @@
                 { id: 'announcements', label: '連絡掲示板', icon: '📢', unreadKey: 'announcements' },
                 { id: 'suggestion-box', label: 'デジタル目安箱', icon: '📮', unreadKey: 'suggestions' },
             ];
+
+            // 汎用的なfetch関数（エラーハンドリング強化版）
+            const fetchWithTimeout = async (url, options = {}, timeout = 10000) => {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeout);
+                
+                try {
+                    const response = await fetch(url, {
+                        ...options,
+                        signal: controller.signal,
+                        mode: 'cors',
+                        credentials: 'omit'
+                    });
+                    clearTimeout(timeoutId);
+                    return response;
+                } catch (error) {
+                    clearTimeout(timeoutId);
+                    throw error;
+                }
+            };
 
             useEffect(() => {
                 const savedAnnouncementsView = JSON.parse(localStorage.getItem('lastViewedAnnouncements') || '{}');
@@ -225,17 +245,19 @@
                 setError(null);
                 try {
                     console.log('Loading tasks from:', TASKS_API_URL);
-                    const response = await fetch(TASKS_API_URL);
-                    if (!response.ok) throw new Error('データの取得に失敗しました');
+                    const response = await fetchWithTimeout(TASKS_API_URL);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
                     const data = await response.json();
                     console.log('Tasks data:', data);
                     
-                    // データ構造の検証
                     if (data.length > 0) {
                         const firstItem = data[0];
                         console.log('First item keys:', Object.keys(firstItem));
                         
-                        // デジタル目安箱のデータが返ってきた場合のエラー表示
                         if (firstItem.hasOwnProperty('timestamp') && firstItem.hasOwnProperty('email')) {
                             console.error('⚠️ タスク管理APIがデジタル目安箱のデータを返しています');
                             setError('タスク管理APIの設定に問題があります。Google Apps Scriptのデプロイメントを確認してください。');
@@ -250,7 +272,11 @@
                     setError(null);
                 } catch (err) {
                     console.error('Error loading tasks:', err);
-                    setError('データの読み込みに失敗しました。しばらくしてから再度お試しください。');
+                    if (err.name === 'AbortError') {
+                        setError('リクエストがタイムアウトしました。ネットワーク接続を確認してください。');
+                    } else {
+                        setError(`データの読み込みに失敗しました: ${err.message}`);
+                    }
                     setTasks([]);
                 } finally {
                     setLoading(false);
@@ -261,12 +287,16 @@
                 setLoading(true);
                 setError(null);
                 try {
-                    const response = await fetch(SUGGESTIONS_API_URL);
-                    if (!response.ok) throw new Error('データの取得に失敗しました');
+                    console.log('Loading suggestions from:', SUGGESTIONS_API_URL);
+                    const response = await fetchWithTimeout(SUGGESTIONS_API_URL);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
                     const data = await response.json();
                     console.log('Suggestions data:', data);
                     
-                    // 「未確認」のものを除外
                     const filteredData = Array.isArray(data) 
                         ? data.filter(item => item.status !== '未確認')
                         : [];
@@ -276,7 +306,11 @@
                     setError(null);
                 } catch (err) {
                     console.error('Error loading suggestions:', err);
-                    setError('データの読み込みに失敗しました。しばらくしてから再度お試しください。');
+                    if (err.name === 'AbortError') {
+                        setError('リクエストがタイムアウトしました。ネットワーク接続を確認してください。');
+                    } else {
+                        setError(`データの読み込みに失敗しました: ${err.message}`);
+                    }
                     setSuggestions([]);
                 } finally {
                     setLoading(false);
@@ -287,8 +321,13 @@
                 setLoading(true);
                 setError(null);
                 try {
-                    const response = await fetch(ANNOUNCEMENTS_API_URL);
-                    if (!response.ok) throw new Error('データの取得に失敗しました');
+                    console.log('Loading announcements from:', ANNOUNCEMENTS_API_URL);
+                    const response = await fetchWithTimeout(ANNOUNCEMENTS_API_URL);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
                     const data = await response.json();
                     console.log('Announcements data:', data);
                     setAnnouncements(Array.isArray(data) ? data : []);
@@ -296,7 +335,11 @@
                     setError(null);
                 } catch (err) {
                     console.error('Error loading announcements:', err);
-                    setError('データの読み込みに失敗しました。しばらくしてから再度お試しください。');
+                    if (err.name === 'AbortError') {
+                        setError('リクエストがタイムアウトしました。ネットワーク接続を確認してください。');
+                    } else {
+                        setError(`データの読み込みに失敗しました: ${err.message}`);
+                    }
                     setAnnouncements([]);
                 } finally {
                     setLoading(false);
@@ -305,8 +348,13 @@
 
             const loadDiscussions = async () => {
                 try {
-                    const response = await fetch(DISCUSSIONS_API_URL);
-                    if (!response.ok) throw new Error('議論マップの取得に失敗しました');
+                    console.log('Loading discussions from:', DISCUSSIONS_API_URL);
+                    const response = await fetchWithTimeout(DISCUSSIONS_API_URL);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
                     const data = await response.json();
                     console.log('Discussions data:', data);
                     setDiscussions(Array.isArray(data) ? data : []);
@@ -319,8 +367,13 @@
             const loadReactions = async () => {
                 if (!REACTIONS_API_URL) return;
                 try {
-                    const response = await fetch(REACTIONS_API_URL);
-                    if (!response.ok) throw new Error('反応データの取得に失敗しました');
+                    console.log('Loading reactions from:', REACTIONS_API_URL);
+                    const response = await fetchWithTimeout(REACTIONS_API_URL);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
                     const data = await response.json();
                     console.log('Reactions data:', data);
                     setReactions(data || {});
@@ -336,7 +389,7 @@
                     return;
                 }
                 try {
-                    const response = await fetch(REACTIONS_API_URL, {
+                    const response = await fetchWithTimeout(REACTIONS_API_URL, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -346,12 +399,18 @@
                             reactionType: reactionType
                         })
                     });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
                     const data = await response.json();
                     if (data.success) {
                         await loadReactions();
                     }
                 } catch (err) {
                     console.error('Error adding reaction:', err);
+                    alert('反応の送信に失敗しました。もう一度お試しください。');
                 }
             };
 
@@ -519,7 +578,6 @@
                 </header>
             );
 
-            // North Star（上位目標）コンポーネント
             const NorthStar = () => (
                 <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border-l-4 border-yellow-500 p-4 mb-6">
                     <div className="flex items-start gap-3">
@@ -970,7 +1028,6 @@
                 );
             };
 
-            // 議論マップページ
             const DiscussionMapPage = () => {
                 const getStatusIcon = (status) => {
                     const icons = {
@@ -1009,7 +1066,6 @@
                                 対立点を整理し、全員が納得できる解を見つけるための進捗を可視化します
                             </p>
 
-                            {/* 進捗バー */}
                             <div className="mb-6">
                                 <div className="flex justify-between items-center mb-2">
                                     <span className="text-sm font-medium text-gray-700">全体の合意進捗</span>
@@ -1029,7 +1085,6 @@
                             </div>
                         </div>
 
-                        {/* 議論一覧 */}
                         <div className="space-y-4">
                             {discussions.length === 0 ? (
                                 <div className="bg-white rounded-lg shadow-lg p-8 text-center">
@@ -1237,7 +1292,6 @@
                                                             </button>
                                                         )}
                                                         
-                                                        {/* 意思表示ボタン */}
                                                         {REACTIONS_API_URL && (
                                                             <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                                                                 <p className="text-xs text-gray-600 mb-2">この意見に対するあなたの反応：</p>
