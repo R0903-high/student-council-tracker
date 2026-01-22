@@ -383,34 +383,49 @@
                 }
             };
 
-            const addReaction = async (suggestionId, reactionType) => {
+            const addReaction = async (suggestionId, reactionType, event) => {
                 if (!REACTIONS_API_URL) {
                     alert('意思表示機能は現在準備中です');
                     return;
                 }
+                
                 try {
-                    const response = await fetchWithTimeout(REACTIONS_API_URL, {
+                    console.log('Sending reaction:', { suggestionId, reactionType });
+                    
+                    // Google Apps ScriptのPOSTリクエストは特殊な処理が必要
+                    const response = await fetch(REACTIONS_API_URL, {
                         method: 'POST',
+                        mode: 'no-cors', // Google Apps Scriptの場合はno-corsを使用
                         headers: {
-                            'Content-Type': 'application/json',
+                            'Content-Type': 'text/plain', // text/plainに変更
                         },
                         body: JSON.stringify({
-                            suggestionId: suggestionId,
+                            suggestionId: String(suggestionId),
                             reactionType: reactionType
                         })
                     });
                     
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
+                    // no-corsモードではレスポンスが読めないため、少し待ってからデータを再読み込み
+                    console.log('Reaction sent, reloading data...');
+                    setTimeout(() => {
+                        loadReactions();
+                    }, 1000);
+                    
+                    // ユーザーにフィードバック
+                    const button = event?.target?.closest('button');
+                    if (button) {
+                        const originalText = button.innerHTML;
+                        button.innerHTML = '✓ 送信完了';
+                        button.disabled = true;
+                        setTimeout(() => {
+                            button.innerHTML = originalText;
+                            button.disabled = false;
+                        }, 2000);
                     }
                     
-                    const data = await response.json();
-                    if (data.success) {
-                        await loadReactions();
-                    }
                 } catch (err) {
                     console.error('Error adding reaction:', err);
-                    alert('反応の送信に失敗しました。もう一度お試しください。');
+                    alert('反応の送信に失敗しました。ネットワーク接続を確認してください。');
                 }
             };
 
@@ -1301,7 +1316,10 @@
                                                                         return (
                                                                             <button
                                                                                 key={reactionType}
-                                                                                onClick={() => addReaction(suggestion.id, reactionType)}
+                                                                                onClick={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    addReaction(suggestion.id, reactionType, e);
+                                                                                }}
                                                                                 className="flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-300 rounded-full hover:bg-indigo-50 hover:border-indigo-300 transition-colors text-sm"
                                                                             >
                                                                                 <span>{reactionType === '納得' ? '👍' : reactionType === '共感する' ? '❤️' : '🤔'}</span>
