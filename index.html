@@ -148,9 +148,7 @@
                 try {
                     const response = await fetch(url, {
                         ...options,
-                        signal: controller.signal,
-                        mode: 'cors',
-                        credentials: 'omit'
+                        signal: controller.signal
                     });
                     clearTimeout(timeoutId);
                     return response;
@@ -380,18 +378,29 @@
             };
 
             const loadReactions = async () => {
-                if (!REACTIONS_API_URL) return;
+                if (!REACTIONS_API_URL) {
+                    setReactions({});
+                    return;
+                }
                 try {
                     console.log('Loading reactions from:', REACTIONS_API_URL);
                     const response = await fetchWithTimeout(REACTIONS_API_URL);
                     
                     if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
+                        console.warn('Reactions API returned error:', response.status);
+                        setReactions({});
+                        return;
                     }
                     
                     const data = await response.json();
                     console.log('Reactions data:', data);
-                    setReactions(data || {});
+                    
+                    // データが配列またはオブジェクトであることを確認
+                    if (data && typeof data === 'object') {
+                        setReactions(data);
+                    } else {
+                        setReactions({});
+                    }
                 } catch (err) {
                     console.error('Error loading reactions:', err);
                     setReactions({});
@@ -965,8 +974,11 @@
                 const progressPercent = totalDiscussions > 0 ? Math.round((agreedCount / totalDiscussions) * 100) : 0;
 
                 // リアルタイム集計パネルのデータ
-                const totalReactionCount = Object.values(reactions).reduce((sum, reactionObj) => {
-                    return sum + Object.values(reactionObj).reduce((s, count) => s + count, 0);
+                const totalReactionCount = Object.values(reactions || {}).reduce((sum, reactionObj) => {
+                    if (!reactionObj || typeof reactionObj !== 'object') return sum;
+                    return sum + Object.values(reactionObj).reduce((s, count) => {
+                        return s + (typeof count === 'number' ? count : 0);
+                    }, 0);
                 }, 0);
 
                 return (
@@ -1075,7 +1087,9 @@
                                 ) : (
                                     discussions.map((discussion) => {
                                         const discussionReactions = reactions[discussion.id] || {};
-                                        const totalReactions = Object.values(discussionReactions).reduce((sum, count) => sum + count, 0);
+                                        const totalReactions = Object.values(discussionReactions).reduce((sum, count) => {
+                                            return sum + (typeof count === 'number' ? count : 0);
+                                        }, 0);
                                         
                                         return (
                                             <div
